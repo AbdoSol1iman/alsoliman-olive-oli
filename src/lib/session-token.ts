@@ -8,31 +8,29 @@
  * navigation validator quiet (no render-time redirect during prefetch).
  */
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const ADMIN_COOKIE = "slm_admin";
 export const SESSION_MAX_AGE = 60 * 60 * 8; // 8 hours
 
-let processSecret: string | null = null;
-
 /**
  * Session signing secret.
- * - Production: uses ADMIN_SESSION_SECRET. If it is missing we fall back to a
- *   random per-process key rather than shipping a fixed, guessable secret —
- *   sessions then invalidate on every restart, which is the safe failure mode.
+ * - Production: ADMIN_SESSION_SECRET is REQUIRED. A per-process random
+ *   fallback is not safe here: the proxy (middleware) and the server run in
+ *   separate module instances, so each would generate a different key and
+ *   every session would be rejected — silently breaking admin login. Failing
+ *   loudly at request time is the honest failure mode.
  * - Development: a well-known constant so local logins work out of the box.
  */
 export function sessionSecret() {
   const configured = (process.env.ADMIN_SESSION_SECRET ?? process.env.SESSION_SECRET ?? "").trim();
   if (configured) return configured;
   if (process.env.NODE_ENV === "production") {
-    if (!processSecret) {
-      processSecret = randomBytes(32).toString("hex");
-      console.warn(
-        "[auth] ADMIN_SESSION_SECRET is not set — using a random per-process key. Admin sessions will not survive restarts. Set ADMIN_SESSION_SECRET in the environment.",
-      );
-    }
-    return processSecret;
+    throw new Error(
+      "ADMIN_SESSION_SECRET is not set. Admin sessions cannot be signed in production. " +
+        "Generate one with `openssl rand -hex 32` and set it in the environment " +
+        "(see .env.example).",
+    );
   }
   return "dev-only-insecure-secret-change-me";
 }
