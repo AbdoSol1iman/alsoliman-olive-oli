@@ -29,7 +29,9 @@ The site runs end-to-end today; unconfirmed data stays empty or flagged.
 رسوم الشحن وجدول المحافظات في `src/lib/config.ts → shipping` مبدئية.
 
 - [ ] أكّد رسوم كل محافظة والمدد المعلنة (`fee`, `days`)
-- [ ] أضف حد الشحن المجاني `freeThreshold` إن وُجد (الحالي `null` — لا يُعلن شيء)
+- [ ] أكّد قواعد الشحن المجاني الحالية في `src/lib/config.ts → shipping`:
+      المنصورة مجانًا (`freeCityNames`)، وطلبات الجملة ١٢ زجاجة فأكثر
+      (`wholesaleMinQty`) مجانًا لباقي المحافظات — الرقم مبدئي ويحتاج تأكيدك
 
 ## 4. بيانات التواصل / Contact
 

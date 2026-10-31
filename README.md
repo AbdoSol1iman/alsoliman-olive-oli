@@ -92,9 +92,9 @@ The current wordmark is a **temporary placeholder** (`src/components/brand/Logo.
 1. Drop the file at `public/brand/logo.png` (transparent PNG, ~640 px wide).
 2. Set `logoMode: "image"` in `src/lib/config.ts`.
 
-The bottle photography in `public/products/` is derived from the single supplied
-product photo. The bottle, label and cap are never altered — only the background
-is removed and a warm colour grade is applied.
+The bottle photography in `public/products/` is derived from the supplied
+product photos (currently the minimalist full-bottle shot). Only the background
+is removed — the bottle itself is never altered.
 
 ---
 

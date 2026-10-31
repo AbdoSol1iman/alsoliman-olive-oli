@@ -39,6 +39,20 @@ export default async function ShippingPage({ params }: { params: Promise<{ local
       <section className="paper py-14 md:py-20">
         <div className="container-page grid gap-12 lg:grid-cols-[1.3fr_0.7fr] lg:gap-16">
           <div>
+            <div className="mb-6 border border-forest/25 bg-cream/50 p-5">
+              <h2 className="text-[1.05rem] text-forest">{dict.shippingPage.freeTitle}</h2>
+              <ul className="mt-3 space-y-2 text-[0.85rem] leading-7 text-ink-muted">
+                <li className="flex items-start gap-2">
+                  <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-gold" />
+                  {dict.shippingPage.freeCityLine}
+                </li>
+                <li className="flex items-start gap-2">
+                  <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-gold" />
+                  {dict.shippingPage.freeWholesaleLine.replace("{n}", String(shipping.wholesaleMinQty))}
+                </li>
+              </ul>
+            </div>
+
             <div className="overflow-hidden border border-gold/20">
               <table className="w-full border-collapse text-[0.85rem]">
                 <caption className="sr-only">{dict.shippingPage.title}</caption>

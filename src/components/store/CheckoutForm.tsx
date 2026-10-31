@@ -10,7 +10,7 @@ import { submitOrder } from "@/app/actions/orders";
 import { useCartLines, useCartStore } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { checkoutSchema, fieldErrors } from "@/lib/checkout-schema";
-import { payments, shipping, type ZoneKey } from "@/lib/config";
+import { payments, shipping, shippingFeeFor, isFreeCity, isWholesale, type ZoneKey } from "@/lib/config";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
@@ -53,8 +53,19 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
   };
 
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
-  const zoneFee = form.governorate ? shipping.zones[form.governorate]?.fee ?? shipping.defaultFee : null;
+  const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+  const zoneFee = form.governorate
+    ? shippingFeeFor({ governorate: form.governorate, city: form.city, totalQty })
+    : null;
   const shippingFee = zoneFee ?? 0;
+  const freeReason =
+    zoneFee === 0
+      ? isFreeCity(form.city)
+        ? ("city" as const)
+        : isWholesale(totalQty)
+          ? ("wholesale" as const)
+          : null
+      : null;
   const total = subtotal + shippingFee;
 
   const set = (field: keyof typeof form, value: string) => {
@@ -372,9 +383,22 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
             <div className="flex justify-between">
               <dt className="text-ink-muted">{dict.checkout.shippingFee}</dt>
               <dd className="tnum text-forest">
-                {zoneFee === null ? <span className="text-[0.72rem] text-ink-muted">{dict.cart.shippingNote}</span> : formatPrice(shippingFee, locale)}
+                {zoneFee === null ? (
+                  <span className="text-[0.72rem] text-ink-muted">{dict.cart.shippingNote}</span>
+                ) : zoneFee === 0 ? (
+                  <span className="text-forest">{dict.cart.free}</span>
+                ) : (
+                  formatPrice(shippingFee, locale)
+                )}
               </dd>
             </div>
+            {freeReason === "city" ? (
+              <p className="text-[0.7rem] leading-6 text-forest">{dict.checkout.freeCityNote}</p>
+            ) : freeReason === "wholesale" ? (
+              <p className="text-[0.7rem] leading-6 text-forest">
+                {dict.checkout.freeWholesaleNote.replace("{n}", String(shipping.wholesaleMinQty))}
+              </p>
+            ) : null}
           </dl>
 
           <div className="mt-5 flex items-center justify-between border-t border-gold/25 pt-5">

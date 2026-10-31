@@ -102,8 +102,8 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
                     ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
                     : "Alsuliman extra virgin olive oil bottle"
                 }
-                width={369}
-                height={1403}
+                width={391}
+                height={1476}
                 priority
                 sizes="(max-width: 1024px) 60vw, 32vw"
                 className="h-[90%] w-auto object-contain drop-shadow-[0_28px_36px_rgba(38,49,31,0.28)]"

@@ -1,7 +1,7 @@
 import "server-only";
 import { getDb } from "./db";
 import { products } from "./products";
-import { shipping, type ZoneKey } from "./config";
+import { shippingFeeFor, type ZoneKey } from "./config";
 import { checkoutSchema } from "./checkout-schema";
 
 export { governorateKeys } from "./checkout-schema";
@@ -31,8 +31,6 @@ export type OrderItem = {
   unit_price: number;
   qty: number;
 };
-
-const shippingFor = (zone: ZoneKey) => shipping.zones[zone]?.fee ?? shipping.defaultFee;
 
 const makeReference = () => {
   const d = new Date();
@@ -73,7 +71,13 @@ export function createOrder(raw: unknown): { ok: true; reference: string } | { o
   }
 
   const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
-  const fee = shippingFor(input.governorate as ZoneKey);
+  // Mansoura and wholesale orders ship free — same resolver as the checkout preview.
+  const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+  const fee = shippingFeeFor({
+    governorate: input.governorate as ZoneKey,
+    city: input.city,
+    totalQty,
+  });
   const total = subtotal + fee;
 
   const existing = db
