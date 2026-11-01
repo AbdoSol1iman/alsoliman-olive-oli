@@ -82,8 +82,9 @@ export function Logo({
   const subline = locale === "ar" ? brand.markSublineAr : brand.markSublineEn;
 
   if (brand.logoMode === "image") {
+    // Stacked logo — needs more height than a horizontal mark to stay legible.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={brand.logoImage} alt={name} className={cx("h-12 w-auto", className)} />;
+    return <img src={brand.logoImage} alt={name} className={cx("h-16 w-auto md:h-20", className)} />;
   }
 
   if (variant === "stacked") {

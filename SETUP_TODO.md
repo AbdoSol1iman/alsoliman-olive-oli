@@ -8,13 +8,13 @@ The site runs end-to-end today; unconfirmed data stays empty or flagged.
 
 ---
 
-## 1. الشعار الحقيقي / Real logo
+## 1. الشعار الحقيقي / Real logo ✅
 
-- [ ] ضع ملف الشعار في `public/brand/logo.png` (PNG شفاف، عرض ~640px، يفضَّل بخلفية شفافة)
-- [ ] غيّر `brand.logoMode` من `"wordmark"` إلى `"image"` في `src/lib/config.ts`
+- [x] ضع ملف الشعار في `public/brand/logo.png` (تم: خلفية الشعار أُزيلت وأصبحت شفافة، عرض 595px)
+- [x] غيّر `brand.logoMode` من `"wordmark"` إلى `"image"` في `src/lib/config.ts`
 
-> الرسم الحالي في `src/components/brand/Logo.tsx` علامة مؤقتة مرسومة كـ SVG،
-> وليست شعار العلامة التجارية.
+> ملاحظة: الرسم SVG في `src/components/brand/Logo.tsx` ما زال يُستخدم في
+> شريط الأدمن وصفحات 404/error — استبدله بالصورة إن أردت توحيد الشكل.
 
 ## 2. الأسعار والمخزون / Prices & stock
 

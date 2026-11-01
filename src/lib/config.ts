@@ -18,8 +18,8 @@ export const brand = {
   markSublineEn: "Extra Virgin Olive Oil",
   taglineAr: "أصالة الزيت.. من قلب الطبيعة",
   taglineEn: "Olive oil, the way nature intended",
-  /** Swap to "image" once public/brand/logo.png is supplied. */
-  logoMode: "wordmark" as "wordmark" | "image",
+  /** Real logo supplied (public/brand/logo.png) — switch to "wordmark" for the old placeholder. */
+  logoMode: "image" as "wordmark" | "image",
   logoImage: "/brand/logo.png",
   currency: "EGP",
   currencyAr: "ج.م",

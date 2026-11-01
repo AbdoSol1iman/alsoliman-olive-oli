@@ -86,11 +86,11 @@ so an unconfigured site never shows an empty phone icon or dead link.
 
 ### Branding
 
-The current wordmark is a **temporary placeholder** (`src/components/brand/Logo.tsx`,
-`brand.logoMode: "wordmark"`). To use the real logo:
-
-1. Drop the file at `public/brand/logo.png` (transparent PNG, ~640 px wide).
-2. Set `logoMode: "image"` in `src/lib/config.ts`.
+The real logo is installed (`public/brand/logo.png`, background keyed out to
+transparent, ~640 px wide; `brand.logoMode: "image"`). The SVG mark in
+`src/components/brand/Logo.tsx` is a leftover placeholder that still renders on
+the admin bar, 404 and error pages — replace those usages with the image if you
+want full consistency.
 
 The bottle photography in `public/products/` is derived from the supplied
 product photos (currently the minimalist full-bottle shot). Only the background
