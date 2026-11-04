@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const params = request.nextUrl.searchParams;
-  const csv = ordersToCsv({
+  const csv = await ordersToCsv({
     status: params.get("status") ?? "",
     q: params.get("q") ?? "",
     from: params.get("from") ?? "",

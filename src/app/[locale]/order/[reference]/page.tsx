@@ -30,7 +30,7 @@ export default async function OrderPage({
   const locale = raw;
   const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
   const contact = settings.contact;
-  const result = getOrderByReference(reference);
+  const result = await getOrderByReference(reference);
 
   if (!result) {
     return (

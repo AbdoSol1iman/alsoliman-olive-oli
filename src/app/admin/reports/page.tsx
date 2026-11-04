@@ -38,7 +38,7 @@ const SeriesTable = ({
 export default async function AdminReportsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const stats = orderStats();
+  const stats = await orderStats();
 
   return (
     <div className="space-y-5">

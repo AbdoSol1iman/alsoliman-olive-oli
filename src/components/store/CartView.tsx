@@ -5,7 +5,6 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/Button";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
 import { Trash } from "@/components/ui/Icons";
-import { WhatsAppCheckoutButton } from "@/components/store/WhatsAppCheckoutButton";
 import { useCartLines } from "@/lib/catalog-client";
 import { useCartStore } from "@/lib/cart-store";
 import { formatPrice } from "@/lib/format";
@@ -15,12 +14,9 @@ import type { Locale } from "@/lib/products";
 export function CartView({
   locale,
   dict,
-  whatsappNumber,
 }: {
   locale: Locale;
   dict: Dictionary;
-  /** Effective WhatsApp Business number (settings → contact). */
-  whatsappNumber: string;
 }) {
   const lines = useCartLines();
   const setQty = useCartStore((s) => s.setQty);
@@ -138,16 +134,7 @@ export function CartView({
               {formatPrice(subtotal, locale)}
             </span>
           </div>
-          <WhatsAppCheckoutButton
-            locale={locale}
-            dict={dict}
-            whatsappNumber={whatsappNumber}
-            className="mt-6 w-full"
-          />
-          <p className="mt-3 text-center text-[0.68rem] leading-5 text-ink-muted">
-            {dict.cart.whatsappNote}
-          </p>
-          <ButtonLink href={`/${locale}/checkout`} variant="outline" size="lg" className="mt-3 w-full">
+          <ButtonLink href={`/${locale}/checkout`} size="lg" className="mt-6 w-full">
             {dict.cart.checkout}
           </ButtonLink>
           <p className="mt-3 text-center text-[0.68rem] text-ink-muted">{dict.cart.taxes}</p>

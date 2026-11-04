@@ -1,5 +1,11 @@
 import "server-only";
-import Database from "better-sqlite3";
+import {
+  createClient,
+  type Client,
+  type ResultSet,
+  type Transaction,
+  type Value,
+} from "@libsql/client";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -11,8 +17,6 @@ const dbFile = process.env.DATABASE_FILE ?? path.join(dataDir, "store.db");
 
 /** Uploads live next to the database so one persistent volume covers both. */
 export const uploadsDir = path.join(dataDir, "uploads");
-
-let db: Database.Database | null = null;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS orders (
@@ -153,43 +157,125 @@ const SCHEMA = `
   );
 `;
 
-function migrate(database: Database.Database) {
-  database.exec(SCHEMA);
+type Args = readonly unknown[];
+
+/** Both `Client` and `Transaction` can execute a single statement. */
+type Executor = Pick<Client, "execute"> | Pick<Transaction, "execute">;
+
+export type Statement = {
+  get<T = Record<string, unknown>>(...args: Args): Promise<T | undefined>;
+  all<T = Record<string, unknown>>(...args: Args): Promise<T[]>;
+  run(...args: Args): Promise<{ changes: number; lastInsertRowid: number | bigint }>;
+};
+
+export type Db = {
+  prepare(sql: string): Statement;
+  exec(sql: string): Promise<void>;
+  transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T>;
+};
+
+/** libSQL rejects `undefined`; SQL wants NULL. */
+const toValue = (value: unknown): Value => (value === undefined ? null : (value as Value));
+
+/**
+ * Rows from libSQL are array-like proxies. Copy them into plain objects with
+ * named keys so React server→client serialisation and spreads behave exactly
+ * like they did with better-sqlite3.
+ */
+const toPlainRow = (row: ResultSet["rows"][number], columns: string[]) => {
+  const out: Record<string, unknown> = {};
+  for (let i = 0; i < columns.length; i += 1) out[columns[i]] = row[i];
+  return out;
+};
+
+function makeDb(executor: Executor, client: Client): Db {
+  const prepare = (sql: string): Statement => {
+    const exec = (args: Args) => executor.execute({ sql, args: args.map(toValue) });
+
+    return {
+      async get<T = Record<string, unknown>>(...args: Args) {
+        const result = await exec(args);
+        const row = result.rows[0];
+        return row ? (toPlainRow(row, result.columns) as T) : undefined;
+      },
+      async all<T = Record<string, unknown>>(...args: Args) {
+        const result = await exec(args);
+        return result.rows.map((row) => toPlainRow(row, result.columns)) as T[];
+      },
+      async run(...args: Args) {
+        const result = await exec(args);
+        return {
+          changes: result.rowsAffected,
+          lastInsertRowid: result.lastInsertRowid ?? 0,
+        };
+      },
+    };
+  };
+
+  return {
+    prepare,
+    async exec(sql) {
+      await client.executeMultiple(sql);
+    },
+    async transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> {
+      const tx = await client.transaction("write");
+      try {
+        const result = await fn(makeDb(tx, client));
+        await tx.commit();
+        return result;
+      } catch (error) {
+        try {
+          await tx.rollback();
+        } catch {
+          // already rolled back / connection gone — nothing left to undo
+        }
+        throw error;
+      } finally {
+        try {
+          tx.close();
+        } catch {
+          // ignore double-close
+        }
+      }
+    },
+  };
+}
+
+async function migrate(db: Db) {
+  await db.exec(SCHEMA);
 
   // Lightweight, idempotent column additions for databases created before
   // the dashboard existed.
-  const orderColumns = database
-    .prepare("PRAGMA table_info(orders)")
-    .all() as { name: string }[];
+  const orderColumns = await db.prepare("PRAGMA table_info(orders)").all<{ name: string }>();
   const hasColumn = (name: string) => orderColumns.some((c) => c.name === name);
   if (!hasColumn("updated_at")) {
-    database.exec("ALTER TABLE orders ADD COLUMN updated_at TEXT");
+    await db.exec("ALTER TABLE orders ADD COLUMN updated_at TEXT");
   }
 }
 
 /** First-run seed: move the original code catalog into the database. */
-function seed(database: Database.Database) {
+async function seed(db: Db) {
   const now = new Date().toISOString();
-  const categoryCount = database.prepare("SELECT COUNT(*) AS n FROM categories").get() as { n: number };
+  const categoryCount = (await db.prepare("SELECT COUNT(*) AS n FROM categories").get<{ n: number }>())!;
 
   if (categoryCount.n === 0) {
-    database
+    await db
       .prepare(
-        `INSERT INTO categories (id, slug, name_ar, name_en, sort_order, active, created_at)
+        `INSERT OR IGNORE INTO categories (id, slug, name_ar, name_en, sort_order, active, created_at)
          VALUES (?, ?, ?, ?, ?, 1, ?)`,
       )
       .run("olive-oil", "olive-oil", "زيت زيتون", "Olive oil", 0, now);
   }
 
-  const productCount = database.prepare("SELECT COUNT(*) AS n FROM products").get() as { n: number };
+  const productCount = (await db.prepare("SELECT COUNT(*) AS n FROM products").get<{ n: number }>())!;
   if (productCount.n > 0) return;
 
   // Mirrors the original `src/lib/products.ts` entry exactly — same ids,
   // slugs, prices and stock — so the storefront looks identical after the move.
   const productId = "extra-virgin";
-  database
+  await db
     .prepare(
-      `INSERT INTO products (
+      `INSERT OR IGNORE INTO products (
         id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
         hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
         badge_ar, badge_en, specs, active, featured, sort_order, sample,
@@ -223,17 +309,23 @@ function seed(database: Database.Database) {
       now,
     );
 
-  const variantStmt = database.prepare(
-    `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, sku, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  variantStmt.run("ev-500", productId, "٥٠٠ مل", "500 ml", 500, 235, null, 24, "SLM-EV-500", 0);
-  variantStmt.run("ev-750", productId, "٧٥٠ مل", "750 ml", 750, 330, null, 18, "SLM-EV-750", 1);
-  variantStmt.run("ev-1000", productId, "١ لتر", "1 L", 1000, 420, null, 12, "SLM-EV-1000", 2);
+  const variants: [string, string, string, number, number, number | null, number, string, number][] = [
+    ["ev-500", "٥٠٠ مل", "500 ml", 500, 235, null, 24, "SLM-EV-500", 0],
+    ["ev-750", "٧٥٠ مل", "750 ml", 750, 330, null, 18, "SLM-EV-750", 1],
+    ["ev-1000", "١ لتر", "1 L", 1000, 420, null, 12, "SLM-EV-1000", 2],
+  ];
+  for (const [id, sizeAr, sizeEn, ml, price, compareAt, stock, sku, sortOrder] of variants) {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, sku, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, productId, sizeAr, sizeEn, ml, price, compareAt, stock, sku, sortOrder);
+  }
 
-  database
+  await db
     .prepare(
-      `INSERT INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
+      `INSERT OR IGNORE INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
        VALUES (?, ?, ?, ?, ?, 0, 1)`,
     )
     .run(
@@ -245,13 +337,40 @@ function seed(database: Database.Database) {
     );
 }
 
-export function getDb() {
-  if (db) return db;
-  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  db = new Database(dbFile);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  migrate(db);
-  seed(db);
+/**
+ * One client per process. `TURSO_DATABASE_URL` (+ `TURSO_AUTH_TOKEN`) points at
+ * the Turso cloud database used in production; without it (local dev, tests)
+ * the same code talks to the SQLite file in `data/`.
+ */
+const globalForDb = globalThis as unknown as { __alsulimanDb?: Promise<Db> };
+
+async function buildDb(): Promise<Db> {
+  const url = process.env.TURSO_DATABASE_URL?.trim();
+  const authToken = process.env.TURSO_AUTH_TOKEN?.trim();
+
+  let client: Client;
+  if (url) {
+    client = createClient({ url, authToken });
+  } else {
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    client = createClient({ url: `file:${dbFile}` });
+    // better-sqlite3 had this on; libSQL's file backend does not.
+    try {
+      await client.execute("PRAGMA foreign_keys = ON");
+    } catch {
+      // pragma unsupported — keep going (remote Turso handles this itself)
+    }
+  }
+
+  const db = makeDb(client, client);
+  await migrate(db);
+  await seed(db);
   return db;
+}
+
+export function getDb(): Promise<Db> {
+  if (!globalForDb.__alsulimanDb) {
+    globalForDb.__alsulimanDb = buildDb();
+  }
+  return globalForDb.__alsulimanDb;
 }

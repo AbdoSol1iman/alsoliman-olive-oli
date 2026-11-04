@@ -20,7 +20,7 @@ export const metadata = { title: "الإعدادات · Admin" };
 export default async function AdminSettingsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const settings = getSettingsAdmin();
+  const settings = await getSettingsAdmin();
 
   return (
     <div className="space-y-5">

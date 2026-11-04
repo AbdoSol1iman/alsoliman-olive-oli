@@ -378,63 +378,11 @@ export function ShippingSettings({ initial }: { initial: Settings["shipping"] })
               </p>
             </div>
 
-            {/* Free cities */}
-            <div>
-              <h3 className="mb-2 text-[0.82rem] text-forest">مدن الشحن المجاني (بالاسم)</h3>
-              <FreeCityList
-                values={draft.freeCityNames}
-                onChange={(values) => set({ freeCityNames: values })}
-              />
-            </div>
+            {/* Shipping is charged by governorate — city names never waive it. */}
           </div>
         );
       }}
     </SettingsForm>
-  );
-}
-
-function FreeCityList({ values, onChange }: { values: string[]; onChange: (v: string[]) => void }) {
-  const [next, setNext] = useState("");
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {values.map((city, i) => (
-          <span
-            key={`${city}-${i}`}
-            className="inline-flex items-center gap-2 rounded-full border border-forest/20 bg-cream/40 px-3 py-1 text-[0.74rem] text-forest"
-          >
-            {city}
-            <button
-              type="button"
-              aria-label={`إزالة ${city}`}
-              onClick={() => onChange(values.filter((_, j) => j !== i))}
-              className="text-red-900 hover:text-red-700"
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        {values.length === 0 ? <span className="text-[0.74rem] text-ink-muted">لا مدن محددة.</span> : null}
-      </div>
-      <div className="flex gap-2">
-        <input
-          value={next}
-          onChange={(e) => setNext(e.target.value)}
-          placeholder="اسم المدينة"
-          className={cx(inputClass, "h-10 max-w-56 text-[0.8rem]")}
-        />
-        <MiniButton
-          onClick={() => {
-            const v = next.trim();
-            if (v && !values.includes(v)) onChange([...values, v]);
-            setNext("");
-          }}
-          className="h-10"
-        >
-          إضافة
-        </MiniButton>
-      </div>
-    </div>
   );
 }
 

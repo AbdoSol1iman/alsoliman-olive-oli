@@ -25,7 +25,7 @@ export default async function CartPage({ params }: { params: Promise<{ locale: s
   const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
   return (
     <section className="paper min-h-[60vh]">
-      <CartView locale={locale} dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
+      <CartView locale={locale} dict={dict} />
     </section>
   );
 }

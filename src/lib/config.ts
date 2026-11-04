@@ -43,12 +43,12 @@ export const contact = {
 export const announcements = {
   ar: [
     "توصيل متاح لجميع محافظات مصر",
-    "شحن مجاني داخل المنصورة",
+    "الشحن يُحسب حسب المحافظة عند إتمام الطلب",
     "زيت زيتون بكر ممتاز — معصور على البارد",
   ],
   en: [
     "Delivery available across all Egyptian governorates",
-    "Free delivery inside Mansoura",
+    "Shipping is calculated by governorate at checkout",
     "Extra virgin olive oil — cold pressed",
   ],
 };
@@ -57,17 +57,12 @@ export const announcements = {
  * Shipping rules. Fees are master-configurable and shown to the customer
  * before payment.
  *
- * Free delivery applies when EITHER:
- *  - the city is Mansoura (matched loosely against the free-text city field,
- *    Arabic or Latin, with or without ال), OR
- *  - the order qualifies as wholesale (≥ wholesaleMinQty bottles) — anywhere
- *    outside Mansoura too.
- * Everything else pays the zone fee below.
+ * The customer always pays the selected governorate's fee. The only waivers are
+ * the owner's deliberate perks: wholesale quantity (≥ wholesaleMinQty bottles)
+ * and an optional free-shipping threshold. A city name never waives shipping.
  */
 export const shipping = {
   freeThreshold: null as number | null,
-  /** Loose city names that always ship free (المنصورة / منصورة / Mansoura…). */
-  freeCityNames: ["منصورة", "منصوره", "mansoura", "mansurah"],
   /** Wholesale = at least this many bottles in one order; ships free. */
   wholesaleMinQty: 12,
   codFee: 0,
@@ -109,14 +104,7 @@ export const shipping = {
 export type ZoneKey = keyof typeof shipping.zones;
 
 /** Total bottles in an order — the input for the wholesale check. */
-export type FeeContext = { governorate: ZoneKey; city: string; totalQty: number };
-
-/** True when the free-text city field names Mansoura (AR/EN, with ال or not). */
-export function isFreeCity(city: string): boolean {
-  const v = city.trim().toLowerCase();
-  if (!v) return false;
-  return shipping.freeCityNames.some((name) => v.includes(name));
-}
+export type FeeContext = { governorate: ZoneKey; totalQty: number };
 
 /** True when the order reaches the wholesale quantity threshold. */
 export function isWholesale(totalQty: number): boolean {
@@ -128,8 +116,8 @@ export function isWholesale(totalQty: number): boolean {
  * (authoritative, re-prices the order) and by the checkout summary preview
  * so what the customer sees is what gets charged.
  */
-export function shippingFeeFor({ governorate, city, totalQty }: FeeContext): number {
-  if (isFreeCity(city) || isWholesale(totalQty)) return 0;
+export function shippingFeeFor({ governorate, totalQty }: FeeContext): number {
+  if (isWholesale(totalQty)) return 0;
   return shipping.zones[governorate]?.fee ?? shipping.defaultFee;
 }
 

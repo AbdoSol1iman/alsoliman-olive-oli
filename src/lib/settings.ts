@@ -28,7 +28,6 @@ export type Settings = {
   shipping: {
     zones: Record<string, ShippingZone>;
     defaultFee: number;
-    freeCityNames: string[];
     wholesaleMinQty: number;
     codFee: number;
     /** Free shipping when the subtotal reaches this amount (null = off). */
@@ -86,7 +85,6 @@ export function defaultSettings(): Settings {
         Object.entries(defaultShipping.zones).map(([key, zone]) => [key, { ...zone }]),
       ),
       defaultFee: defaultShipping.defaultFee,
-      freeCityNames: [...defaultShipping.freeCityNames],
       wholesaleMinQty: defaultShipping.wholesaleMinQty,
       codFee: defaultShipping.codFee,
       freeThreshold: defaultShipping.freeThreshold,
@@ -135,27 +133,27 @@ const mergeDeep = <T>(base: T, override: unknown): T => {
   return out as T;
 };
 
-function readSettings(): Settings {
-  const db = getDb();
+async function readSettings(): Promise<Settings> {
+  const db = await getDb();
   const defaults = defaultSettings();
 
   // First run: materialise the full default snapshot so the settings screen
   // always has something concrete to edit.
-  const count = db.prepare("SELECT COUNT(*) AS n FROM settings").get() as { n: number };
+  const count = (await db.prepare("SELECT COUNT(*) AS n FROM settings").get<{ n: number }>())!;
   if (count.n === 0) {
     const stmt = db.prepare(
       "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
     );
     const now = new Date().toISOString();
     for (const [key, value] of Object.entries(defaults)) {
-      stmt.run(key, JSON.stringify(value), now);
+      await stmt.run(key, JSON.stringify(value), now);
     }
   }
 
-  const rows = db.prepare("SELECT key, value FROM settings").all() as {
+  const rows = await db.prepare("SELECT key, value FROM settings").all<{
     key: string;
     value: string;
-  }[];
+  }>();
   let settings = defaults;
   for (const row of rows) {
     if (!(row.key in defaults)) continue;
@@ -188,24 +186,23 @@ export async function getSettings(): Promise<Settings> {
 /** Uncached read for the settings screen (renders per-request). */
 export const getSettingsAdmin = readSettings;
 
-/** Fresh synchronous read — used by order re-pricing (authoritative). */
-export const readSettingsSync = readSettings;
+/** Fresh read — used by order re-pricing (authoritative, bypasses the cache). */
+export const readSettingsFresh = readSettings;
 
-export function saveSettings(partial: Partial<Settings>): void {
-  const db = getDb();
+export async function saveSettings(partial: Partial<Settings>): Promise<void> {
+  const db = await getDb();
   const now = new Date().toISOString();
-  const stmt = db.prepare(
-    "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-  );
-  const current = readSettings();
-  const tx = db.transaction(() => {
+  const current = await readSettings();
+  await db.transaction(async (tx) => {
+    const stmt = tx.prepare(
+      "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+    );
     for (const [key, value] of Object.entries(partial)) {
       if (value === undefined) continue;
       // Store the whole section (merged) so the DB never holds partial junk.
-      stmt.run(key, JSON.stringify(mergeDeep(current[key as keyof Settings], value)), now);
+      await stmt.run(key, JSON.stringify(mergeDeep(current[key as keyof Settings], value)), now);
     }
   });
-  tx();
   updateTag(SETTINGS_TAG);
   // Contact/shipping/announcements feed the shared layout — refresh those too.
   updateTag(CONTENT_LAYOUT_TAG);
@@ -214,13 +211,7 @@ export function saveSettings(partial: Partial<Settings>): void {
 /** Layout-affecting data (contact, announcements) is tagged separately. */
 export const CONTENT_LAYOUT_TAG = "layout-content";
 
-export type FeeContext = { governorate: string; city: string; totalQty: number; subtotal: number };
-
-export const isFreeCity = (settings: Settings, city: string) => {
-  const v = city.trim().toLowerCase();
-  if (!v) return false;
-  return settings.shipping.freeCityNames.some((name) => v.includes(name));
-};
+export type FeeContext = { governorate: string; totalQty: number; subtotal: number };
 
 export const isWholesale = (settings: Settings, totalQty: number) =>
   totalQty >= settings.shipping.wholesaleMinQty;
@@ -228,9 +219,13 @@ export const isWholesale = (settings: Settings, totalQty: number) =>
 /**
  * Single source of truth for the shipping fee — used by the order action
  * (authoritative, re-prices the order) and the checkout preview.
+ *
+ * The fee is always the selected governorate's zone fee. The only exceptions
+ * are the owner's deliberately configured perks: wholesale quantity and an
+ * optional free-shipping threshold. (City names never zero the fee — that rule
+ * wrongly made Qalyubia orders ship free just because the city said Mansoura.)
  */
-export function shippingFeeFor(settings: Settings, { governorate, city, totalQty, subtotal }: FeeContext): number {
-  if (isFreeCity(settings, city)) return 0;
+export function shippingFeeFor(settings: Settings, { governorate, totalQty, subtotal }: FeeContext): number {
   if (isWholesale(settings, totalQty)) return 0;
   const threshold = settings.shipping.freeThreshold;
   if (threshold !== null && threshold > 0 && subtotal >= threshold) return 0;
@@ -248,7 +243,6 @@ export function toCheckoutConfig(settings: Settings): CheckoutConfig {
   return {
     zones: settings.shipping.zones,
     defaultFee: settings.shipping.defaultFee,
-    freeCityNames: settings.shipping.freeCityNames,
     wholesaleMinQty: settings.shipping.wholesaleMinQty,
     freeThreshold: settings.shipping.freeThreshold,
     codFee: settings.shipping.codFee,

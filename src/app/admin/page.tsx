@@ -13,7 +13,7 @@ const stat = (label: string, value: string, hint?: string) => ({ label, value, h
 export default async function AdminHome() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const stats = orderStats();
+  const stats = await orderStats();
 
   const cards = [
     stat("إجمالي المبيعات", formatPrice(stats.revenue), "من كل الطلبات غير الملغاة"),

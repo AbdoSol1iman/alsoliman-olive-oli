@@ -10,7 +10,7 @@ export const metadata = { title: "إضافة منتج" };
 export default async function NewProductPage() {
   await connection();
   await requireAdmin();
-  const categories = listCategoriesAdmin();
+  const categories = await listCategoriesAdmin();
 
   return (
     <div className="space-y-5">

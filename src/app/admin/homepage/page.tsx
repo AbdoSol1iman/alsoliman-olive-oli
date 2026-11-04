@@ -10,7 +10,7 @@ export const metadata = { title: "محرر الصفحة الرئيسية · Admi
 export default async function AdminHomepagePage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const content = getContentAdmin();
+  const content = await getContentAdmin();
 
   const sections: EditorSection[] = [
     {

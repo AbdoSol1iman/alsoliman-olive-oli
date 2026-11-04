@@ -12,8 +12,8 @@ export const instant = false;
 export default async function AdminProductsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const products = listProductsAdmin();
-  const categories = listCategoriesAdmin();
+  const products = await listProductsAdmin();
+  const categories = await listCategoriesAdmin();
   const categoryName = (id: string | null) =>
     id ? (categories.find((c) => c.id === id)?.nameAr ?? "—") : "—";
 

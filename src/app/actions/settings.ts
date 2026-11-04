@@ -44,7 +44,6 @@ const settingsSchemas: Record<keyof Settings, z.ZodType> = {
       }),
     ),
     defaultFee: money,
-    freeCityNames: z.array(z.string().trim().min(1).max(60)).max(30),
     wholesaleMinQty: z.coerce.number().int().min(1).max(1000),
     codFee: money,
     freeThreshold: optMoney,
@@ -89,7 +88,7 @@ export async function saveSettingsAction(
     return fail(`${issue?.path.join(".") || section}: ${issue?.message || "invalid"}`);
   }
   try {
-    saveSettings({ [section]: parsed.data } as Partial<Settings>);
+    await saveSettings({ [section]: parsed.data } as Partial<Settings>);
     revalidatePath("/admin/settings");
     revalidatePath("/admin", "layout");
     revalidatePath("/ar", "layout");
@@ -138,7 +137,7 @@ export async function saveContentAction(
 
   try {
     const { saveContentSection } = await import("@/lib/content");
-    saveContentSection(section as never, parsed.data);
+    await saveContentSection(section as never, parsed.data);
     revalidatePath("/admin", "layout");
     revalidatePath("/admin/homepage");
     revalidatePath("/admin/content");

@@ -13,7 +13,6 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { checkoutSchema, fieldErrors } from "@/lib/checkout-schema";
 import {
   checkoutFeeFor,
-  isFreeCityFor,
   isWholesaleFor,
   type CheckoutConfig,
 } from "@/lib/fee";
@@ -70,20 +69,13 @@ export function CheckoutForm({
   const zoneFee = form.governorate
     ? checkoutFeeFor(config, {
         governorate: form.governorate,
-        city: form.city,
         totalQty,
         subtotal,
       })
     : null;
   const shippingFee = zoneFee ?? 0;
   const freeReason =
-    zoneFee === 0
-      ? isFreeCityFor(config, form.city)
-        ? ("city" as const)
-        : isWholesaleFor(config, totalQty)
-          ? ("wholesale" as const)
-          : null
-      : null;
+    zoneFee === 0 && isWholesaleFor(config, totalQty) ? ("wholesale" as const) : null;
   const total = subtotal + shippingFee;
 
   const set = (field: keyof typeof form, value: string) => {
@@ -127,12 +119,25 @@ export function CheckoutForm({
     }
 
     setSubmitting(true);
+    // WhatsApp is part of placing the order, not an optional extra. Open the
+    // tab now, while the click still counts as a user gesture — browsers block
+    // `window.open` once the server action has resolved.
+    let waWindow: Window | null = null;
+    try {
+      waWindow = window.open("about:blank", "_blank");
+    } catch {
+      waWindow = null;
+    }
+    const closeWaWindow = () => {
+      if (waWindow && !waWindow.closed) waWindow.close();
+    };
     try {
       const result = await submitOrder(parsed.data);
       if (!result.ok) {
         // The key is kept so a retry of the same attempt can never double-charge.
         // Surface the real reason instead of one generic message: the customer
         // can act on "item gone" / "governorate changed", but not on a blank slate.
+        closeWaWindow();
         setFormError(
           result.code === "unavailable"
             ? dict.checkout.errorUnavailable
@@ -147,10 +152,25 @@ export function CheckoutForm({
       // customer returns to the shop) gets its own reference.
       keyRef.current = "";
       clear();
+
+      if (result.whatsappHref) {
+        if (waWindow && !waWindow.closed) {
+          waWindow.location.href = result.whatsappHref;
+        } else {
+          // Popup blocked — send the customer straight to WhatsApp in this tab.
+          // The message carries the reference, so the confirmation page is not
+          // the only record of the order.
+          window.location.href = result.whatsappHref;
+          return;
+        }
+      } else {
+        closeWaWindow();
+      }
       router.push(`/${locale}/order/${result.reference}`);
     } catch {
       // The action never produced a result: offline, or the page predates the
       // last deploy (server-action ids change per build → HTTP 400).
+      closeWaWindow();
       setFormError(dict.checkout.errorStale);
       setSubmitting(false);
     }
@@ -404,11 +424,13 @@ export function CheckoutForm({
           <dl className="mt-6 space-y-3 border-t border-gold/25 pt-5 text-[0.84rem]">
             <div className="flex justify-between">
               <dt className="text-ink-muted">{dict.cart.subtotal}</dt>
-              <dd className="tnum text-forest">{formatPrice(subtotal, locale)}</dd>
+              <dd className="tnum text-forest" data-testid="checkout-subtotal">
+                {formatPrice(subtotal, locale)}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-ink-muted">{dict.checkout.shippingFee}</dt>
-              <dd className="tnum text-forest">
+              <dd className="tnum text-forest" data-testid="checkout-shipping">
                 {zoneFee === null ? (
                   <span className="text-[0.72rem] text-ink-muted">{dict.cart.shippingNote}</span>
                 ) : zoneFee === 0 ? (
@@ -418,9 +440,7 @@ export function CheckoutForm({
                 )}
               </dd>
             </div>
-            {freeReason === "city" ? (
-              <p className="text-[0.7rem] leading-6 text-forest">{dict.checkout.freeCityNote}</p>
-            ) : freeReason === "wholesale" ? (
+            {freeReason === "wholesale" ? (
               <p className="text-[0.7rem] leading-6 text-forest">
                 {dict.checkout.freeWholesaleNote.replace("{n}", String(config.wholesaleMinQty))}
               </p>
@@ -429,7 +449,7 @@ export function CheckoutForm({
 
           <div className="mt-5 flex items-center justify-between border-t border-gold/25 pt-5">
             <span className="text-[0.85rem] text-ink-muted">{dict.cart.total}</span>
-            <span className="tnum text-[1.25rem] font-medium text-forest">
+            <span className="tnum text-[1.25rem] font-medium text-forest" data-testid="checkout-total">
               {formatPrice(total, locale)}
             </span>
           </div>

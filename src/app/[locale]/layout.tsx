@@ -95,7 +95,7 @@ export default async function LocaleLayout({
             {children}
           </main>
           <Footer locale={locale} dict={dict} contact={contact} logoSrc={settings.store.logoPath} />
-          <CartDrawer locale={locale} dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
+          <CartDrawer locale={locale} dict={dict} />
           <WhatsAppButton dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
         </CatalogProvider>
       </body>

@@ -25,15 +25,15 @@ export type Session = {
  * A dummy scrypt verify runs for unknown emails so response timing does not
  * reveal whether an account exists.
  */
-export function verifyCredentials(email: string, password: string): AdminUser | null {
-  ensureSeedAdmin();
-  const user = findAdminByEmail(email);
+export async function verifyCredentials(email: string, password: string): Promise<AdminUser | null> {
+  await ensureSeedAdmin();
+  const user = await findAdminByEmail(email);
   if (!user) {
     verifyPassword(password, "scrypt$16384$8$1$00000000000000000000000000000000$" + "00".repeat(64));
     return null;
   }
   if (!verifyPassword(password, user.password_hash)) return null;
-  touchLastLogin(user.id);
+  await touchLastLogin(user.id);
   return user;
 }
 
@@ -59,11 +59,11 @@ export async function clearSession() {
  * invalidating every outstanding session.
  */
 export async function getSession(): Promise<Session | null> {
-  ensureSeedAdmin();
+  await ensureSeedAdmin();
   const store = await cookies();
   const payload = verifyToken(store.get(ADMIN_COOKIE)?.value);
   if (!payload) return null;
-  const user = findAdminByEmail(payload.email);
+  const user = await findAdminByEmail(payload.email);
   if (!user) return null;
   if (user.token_version !== payload.tv) return null;
   return { id: user.id, email: user.email, name: user.name, role: user.role };

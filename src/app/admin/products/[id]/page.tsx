@@ -17,9 +17,9 @@ export default async function EditProductPage({
   await connection();
   await requireAdmin();
   const { id } = await params;
-  const product = getProductForEdit(id);
+  const product = await getProductForEdit(id);
   if (!product) notFound();
-  const categories = listCategoriesAdmin();
+  const categories = await listCategoriesAdmin();
 
   return (
     <div className="space-y-5">

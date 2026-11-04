@@ -10,7 +10,7 @@ export const metadata = { title: "مكتبة الوسائط · Admin" };
 export default async function AdminMediaPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const items = listMedia();
+  const items = await listMedia();
 
   return (
     <div className="space-y-5">

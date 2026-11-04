@@ -11,7 +11,7 @@ export const metadata = { title: "العملاء · Admin" };
 export default async function AdminCustomersPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const customers = listCustomers();
+  const customers = await listCustomers();
 
   return (
     <div className="space-y-5">

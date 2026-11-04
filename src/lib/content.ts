@@ -93,13 +93,13 @@ function sanitize(value: unknown, depth = 0): unknown {
   return null;
 }
 
-function readContent(): SiteContent {
-  const db = getDb();
+async function readContent(): Promise<SiteContent> {
+  const db = await getDb();
   const defaults = defaultContent();
 
-  const rows = db
+  const rows = await db
     .prepare(`SELECT key, value FROM settings WHERE key LIKE '${KEY_PREFIX}%'`)
-    .all() as { key: string; value: string }[];
+    .all<{ key: string; value: string }>();
 
   let content = defaults;
   for (const row of rows) {
@@ -124,9 +124,10 @@ export async function getContent(): Promise<SiteContent> {
 /** Uncached read for the dashboard editors. */
 export const getContentAdmin = readContent;
 
-export function saveContentSection(section: keyof SiteContent, value: unknown): void {
+export async function saveContentSection(section: keyof SiteContent, value: unknown): Promise<void> {
   const now = new Date().toISOString();
-  getDb()
+  const db = await getDb();
+  await db
     .prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)")
     .run(`${KEY_PREFIX}${section}`, JSON.stringify(sanitize(value)), now);
   updateTag(CONTENT_TAG);

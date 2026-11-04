@@ -113,7 +113,8 @@ export async function saveUploadedImage(
     createdAt: now.toISOString(),
   };
 
-  getDb()
+  const db = await getDb();
+  await db
     .prepare(
       `INSERT INTO media (id, path, thumb_path, original_name, mime, size, width, height, alt_ar, alt_en, category, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -137,23 +138,24 @@ export async function saveUploadedImage(
   return item;
 }
 
-export function listMedia(category?: string): MediaItem[] {
-  const db = getDb();
+export async function listMedia(category?: string): Promise<MediaItem[]> {
+  const db = await getDb();
   const rows =
     category && MEDIA_CATEGORIES.includes(category as MediaCategory)
-      ? (db
+      ? await db
           .prepare("SELECT * FROM media WHERE category = ? ORDER BY created_at DESC")
-          .all(category) as MediaRow[])
-      : (db.prepare("SELECT * FROM media ORDER BY created_at DESC").all() as MediaRow[]);
+          .all<MediaRow>(category)
+      : await db.prepare("SELECT * FROM media ORDER BY created_at DESC").all<MediaRow>();
   return rows.map(mapMedia);
 }
 
-export const getMediaById = (id: string) => {
-  const row = getDb().prepare("SELECT * FROM media WHERE id = ?").get(id) as MediaRow | undefined;
+export const getMediaById = async (id: string) => {
+  const db = await getDb();
+  const row = await db.prepare("SELECT * FROM media WHERE id = ?").get<MediaRow>(id);
   return row ? mapMedia(row) : null;
 };
 
-export function updateMediaMeta(
+export async function updateMediaMeta(
   id: string,
   { altAr, altEn, category }: { altAr?: string; altEn?: string; category?: string },
 ) {
@@ -173,7 +175,8 @@ export function updateMediaMeta(
   }
   if (!sets.length) return;
   values.push(id);
-  getDb().prepare(`UPDATE media SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+  const db = await getDb();
+  await db.prepare(`UPDATE media SET ${sets.join(", ")} WHERE id = ?`).run(...values);
   updateTag(MEDIA_TAG);
 }
 
@@ -183,20 +186,20 @@ export function updateMediaMeta(
  * Deletion is blocked while a reference exists, so an admin can never break
  * a live page by accident.
  */
-export function findMediaUsage(src: string): { kind: string; label: string }[] {
-  const db = getDb();
+export async function findMediaUsage(src: string): Promise<{ kind: string; label: string }[]> {
+  const db = await getDb();
   const usage: { kind: string; label: string }[] = [];
 
-  const products = db
+  const products = await db
     .prepare(
       `SELECT DISTINCT p.name_ar FROM product_images i JOIN products p ON p.id = i.product_id WHERE i.src = ?`,
     )
-    .all(src) as { name_ar: string }[];
+    .all<{ name_ar: string }>(src);
   for (const p of products) usage.push({ kind: "product", label: p.name_ar });
 
-  const settings = db
+  const settings = await db
     .prepare("SELECT key, value FROM settings WHERE key LIKE 'content:%'")
-    .all() as { key: string; value: string }[];
+    .all<{ key: string; value: string }>();
   for (const row of settings) {
     if (row.value.includes(src)) {
       usage.push({ kind: "content", label: row.key.replace("content:", "") });
@@ -207,17 +210,18 @@ export function findMediaUsage(src: string): { kind: string; label: string }[] {
 }
 
 export async function deleteMedia(id: string): Promise<void> {
-  const item = getMediaById(id);
+  const item = await getMediaById(id);
   if (!item) return;
 
-  const usage = findMediaUsage(item.path);
+  const usage = await findMediaUsage(item.path);
   if (usage.length > 0) throw new Error("media_in_use");
 
   const dir = path.join(uploadsDir, path.dirname(item.path).replace("/api/media/", ""));
   const fileBase = path.basename(item.path);
   const thumbBase = item.thumbPath ? path.basename(item.thumbPath) : null;
 
-  getDb().prepare("DELETE FROM media WHERE id = ?").run(id);
+  const db = await getDb();
+  await db.prepare("DELETE FROM media WHERE id = ?").run(id);
 
   await Promise.allSettled([
     fs.unlink(path.join(dir, fileBase)),

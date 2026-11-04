@@ -11,7 +11,7 @@ export const metadata = { title: "الملف الشخصي · Admin" };
 export default async function AdminProfilePage() {
   await connection(); // admin renders per-request (session cookie)
   const session = await requireAdmin();
-  const users = listAdminUsers();
+  const users = await listAdminUsers();
 
   const roleLabel = session.role === "owner" ? "مالك المتجر" : "مدير";
 

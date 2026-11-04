@@ -39,12 +39,12 @@ export async function saveProductAction(
   }
 
   const data = parsed.data;
-  const duplicate = listProductsAdmin().find((p) => p.slug === data.slug && p.id !== productId);
+  const duplicate = (await listProductsAdmin()).find((p) => p.slug === data.slug && p.id !== productId);
   if (duplicate) return fail("slug_taken");
 
   try {
-    const id = productId ?? createProduct(data);
-    if (productId) updateProduct(productId, data);
+    const id = productId ?? (await createProduct(data));
+    if (productId) await updateProduct(productId, data);
     refreshAdmin();
     return { ok: true, id };
   } catch (e) {
@@ -57,7 +57,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
   await requireAdmin();
   if (!productId) return fail("invalid");
   try {
-    deleteProduct(productId);
+    await deleteProduct(productId);
     refreshAdmin();
     return { ok: true };
   } catch (e) {
@@ -73,7 +73,7 @@ export async function toggleProductFlagAction(
 ): Promise<ActionResult> {
   await requireAdmin();
   try {
-    setProductFlags(productId, { [flag]: value });
+    await setProductFlags(productId, { [flag]: value });
     refreshAdmin();
     return { ok: true };
   } catch {
@@ -87,7 +87,7 @@ export async function moveProductAction(
 ): Promise<ActionResult> {
   await requireAdmin();
   try {
-    moveProduct(productId, direction);
+    await moveProduct(productId, direction);
     refreshAdmin();
     return { ok: true };
   } catch {
@@ -107,8 +107,8 @@ export async function saveCategoryAction(
   const parsed = categoryInputSchema.safeParse(input);
   if (!parsed.success) return fail("invalid_input");
   try {
-    const id = categoryId ?? createCategory(parsed.data);
-    if (categoryId) updateCategory(categoryId, parsed.data);
+    const id = categoryId ?? (await createCategory(parsed.data));
+    if (categoryId) await updateCategory(categoryId, parsed.data);
     refreshAdmin();
     return { ok: true, id };
   } catch (e) {
@@ -120,7 +120,7 @@ export async function saveCategoryAction(
 export async function deleteCategoryAction(categoryId: string): Promise<ActionResult> {
   await requireAdmin();
   try {
-    deleteCategory(categoryId);
+    await deleteCategory(categoryId);
     refreshAdmin();
     return { ok: true };
   } catch {

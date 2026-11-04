@@ -1,7 +1,7 @@
 import "server-only";
 import { cacheLife, cacheTag, updateTag } from "next/cache";
 import { randomUUID } from "node:crypto";
-import { getDb } from "./db";
+import { getDb, type Db } from "./db";
 import type { Category, Product, ProductImage, ProductSpec, Variant } from "./products";
 import type { CategoryInput, ProductInput } from "./admin-schemas";
 
@@ -135,44 +135,56 @@ function mapProduct(
 /* Reads                                                                */
 /* ------------------------------------------------------------------ */
 
-export function readCatalogData(options: { fallbackImage?: boolean } = {}): {
+export async function readCatalogData(options: { fallbackImage?: boolean } = {}): Promise<{
   products: Product[];
   categories: Category[];
-} {
+}> {
   const fallbackImage = options.fallbackImage ?? true;
-  const db = getDb();
+  const db = await getDb();
 
-  const categoryRows = db
+  const categoryRows = await db
     .prepare("SELECT * FROM categories ORDER BY sort_order, name_ar")
-    .all() as {
-    id: string;
-    slug: string;
-    name_ar: string;
-    name_en: string;
-    sort_order: number;
-    active: number;
-  }[];
+    .all<{
+      id: string;
+      slug: string;
+      name_ar: string;
+      name_en: string;
+      sort_order: number;
+      active: number;
+    }>();
 
   const categoryNames = new Map(
     categoryRows.map((c) => [c.id, { ar: c.name_ar, en: c.name_en }]),
   );
 
-  const productRows = db
-    .prepare("SELECT * FROM products ORDER BY sort_order, created_at")
-    .all() as ProductRow[];
+  // Two queries, not 2×N: the remote database is over HTTP, so per-product
+  // round-trips would make every storefront render needlessly slow.
+  const [productRows, variantRows, imageRows] = await Promise.all([
+    db.prepare("SELECT * FROM products ORDER BY sort_order, created_at").all<ProductRow>(),
+    db
+      .prepare("SELECT * FROM product_variants ORDER BY sort_order, ml")
+      .all<VariantRow>(),
+    db.prepare("SELECT * FROM product_images ORDER BY sort_order").all<ImageRow>(),
+  ]);
 
-  const variantStmt = db.prepare(
-    "SELECT * FROM product_variants WHERE product_id = ? ORDER BY sort_order, ml",
-  );
-  const imageStmt = db.prepare(
-    "SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order",
-  );
+  const variantsByProduct = new Map<string, VariantRow[]>();
+  for (const variant of variantRows) {
+    const list = variantsByProduct.get(variant.product_id) ?? [];
+    list.push(variant);
+    variantsByProduct.set(variant.product_id, list);
+  }
+  const imagesByProduct = new Map<string, ImageRow[]>();
+  for (const image of imageRows) {
+    const list = imagesByProduct.get(image.product_id) ?? [];
+    list.push(image);
+    imagesByProduct.set(image.product_id, list);
+  }
 
   const products = productRows.map((row) =>
     mapProduct(
       row,
-      variantStmt.all(row.id) as VariantRow[],
-      imageStmt.all(row.id) as ImageRow[],
+      variantsByProduct.get(row.id) ?? [],
+      imagesByProduct.get(row.id) ?? [],
       categoryNames,
       fallbackImage,
     ),
@@ -212,25 +224,25 @@ export async function getStoreProducts(): Promise<Product[]> {
 /* Uncached reads (admin, per-request)                                  */
 /* ------------------------------------------------------------------ */
 
-export const listProductsAdmin = () => readCatalogData().products;
+export const listProductsAdmin = async () => (await readCatalogData()).products;
 
-export function getProductAdmin(id: string): Product | null {
-  const { products } = readCatalogData();
+export async function getProductAdmin(id: string): Promise<Product | null> {
+  const { products } = await readCatalogData();
   return products.find((p) => p.id === id) ?? null;
 }
 
 /** Editor-accurate read: no synthetic fallback image. */
-export function getProductForEdit(id: string): Product | null {
-  const { products } = readCatalogData({ fallbackImage: false });
+export async function getProductForEdit(id: string): Promise<Product | null> {
+  const { products } = await readCatalogData({ fallbackImage: false });
   return products.find((p) => p.id === id) ?? null;
 }
 
-export function getProductBySlugAdmin(slug: string): Product | null {
-  const { products } = readCatalogData();
+export async function getProductBySlugAdmin(slug: string): Promise<Product | null> {
+  const { products } = await readCatalogData();
   return products.find((p) => p.slug === slug) ?? null;
 }
 
-export const listCategoriesAdmin = () => readCatalogData().categories;
+export const listCategoriesAdmin = async () => (await readCatalogData()).categories;
 
 /* ------------------------------------------------------------------ */
 /* Mutations — every one refreshes the storefront cache                 */
@@ -243,15 +255,14 @@ function invalidateCatalog() {
   updateTag(CATALOG_TAG);
 }
 
-function writeVariants(productId: string, variants: ProductInput["variants"]) {
-  const db = getDb();
-  db.prepare("DELETE FROM product_variants WHERE product_id = ?").run(productId);
-  const stmt = db.prepare(
+async function writeVariants(tx: Db, productId: string, variants: ProductInput["variants"]) {
+  await tx.prepare("DELETE FROM product_variants WHERE product_id = ?").run(productId);
+  const stmt = tx.prepare(
     `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, sku, sort_order)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
-  variants.forEach((v, index) => {
-    stmt.run(
+  for (const [index, v] of variants.entries()) {
+    await stmt.run(
       v.id || `${productId}-v${index + 1}`,
       productId,
       v.sizeLabelAr,
@@ -263,18 +274,17 @@ function writeVariants(productId: string, variants: ProductInput["variants"]) {
       v.sku,
       index,
     );
-  });
+  }
 }
 
-function writeImages(productId: string, images: ProductInput["images"]) {
-  const db = getDb();
-  db.prepare("DELETE FROM product_images WHERE product_id = ?").run(productId);
-  const stmt = db.prepare(
+async function writeImages(tx: Db, productId: string, images: ProductInput["images"]) {
+  await tx.prepare("DELETE FROM product_images WHERE product_id = ?").run(productId);
+  const stmt = tx.prepare(
     `INSERT INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
-  images.forEach((img, index) => {
-    stmt.run(
+  for (const [index, img] of images.entries()) {
+    await stmt.run(
       randomUUID(),
       productId,
       img.src,
@@ -283,16 +293,16 @@ function writeImages(productId: string, images: ProductInput["images"]) {
       index,
       img.isPrimary || (index === 0 && !images.some((i) => i.isPrimary)) ? 1 : 0,
     );
-  });
+  }
 }
 
-export function createProduct(input: ProductInput): string {
-  const db = getDb();
+export async function createProduct(input: ProductInput): Promise<string> {
+  const db = await getDb();
   const id = randomUUID();
   const now = touch();
 
-  const insert = db.transaction(() => {
-    db.prepare(
+  await db.transaction(async (tx) => {
+    await tx.prepare(
       `INSERT INTO products (
         id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
         hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
@@ -324,21 +334,20 @@ export function createProduct(input: ProductInput): string {
       now,
       now,
     );
-    writeVariants(id, input.variants);
-    writeImages(id, input.images);
+    await writeVariants(tx, id, input.variants);
+    await writeImages(tx, id, input.images);
   });
 
-  insert();
   invalidateCatalog();
   return id;
 }
 
-export function updateProduct(id: string, input: ProductInput): void {
-  const db = getDb();
+export async function updateProduct(id: string, input: ProductInput): Promise<void> {
+  const db = await getDb();
   const now = touch();
 
-  const update = db.transaction(() => {
-    db.prepare(
+  await db.transaction(async (tx) => {
+    await tx.prepare(
       `UPDATE products SET
         slug = ?, category_id = ?, name_ar = ?, name_en = ?, subtitle_ar = ?, subtitle_en = ?,
         hook_ar = ?, hook_en = ?, description_ar = ?, description_en = ?, storage_ar = ?, storage_en = ?,
@@ -369,25 +378,24 @@ export function updateProduct(id: string, input: ProductInput): void {
       now,
       id,
     );
-    writeVariants(id, input.variants);
-    writeImages(id, input.images);
+    await writeVariants(tx, id, input.variants);
+    await writeImages(tx, id, input.images);
   });
 
-  update();
   invalidateCatalog();
 }
 
-export function deleteProduct(id: string): void {
-  const db = getDb();
-  db.prepare("DELETE FROM products WHERE id = ?").run(id);
+export async function deleteProduct(id: string): Promise<void> {
+  const db = await getDb();
+  await db.prepare("DELETE FROM products WHERE id = ?").run(id);
   invalidateCatalog();
 }
 
-export function setProductFlags(
+export async function setProductFlags(
   id: string,
   flags: { active?: boolean; featured?: boolean },
-): void {
-  const db = getDb();
+): Promise<void> {
+  const db = await getDb();
   const sets: string[] = [];
   const values: unknown[] = [];
   if (flags.active !== undefined) {
@@ -401,42 +409,39 @@ export function setProductFlags(
   if (!sets.length) return;
   sets.push("updated_at = ?");
   values.push(touch(), id);
-  db.prepare(`UPDATE products SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+  await db.prepare(`UPDATE products SET ${sets.join(", ")} WHERE id = ?`).run(...values);
   invalidateCatalog();
 }
 
 /** Move a product up/down within its display order (admin list). */
-export function moveProduct(id: string, direction: "up" | "down"): void {
-  const db = getDb();
-  const all = db
+export async function moveProduct(id: string, direction: "up" | "down"): Promise<void> {
+  const db = await getDb();
+  const all = await db
     .prepare("SELECT id, sort_order FROM products ORDER BY sort_order, created_at")
-    .all() as { id: string; sort_order: number }[];
+    .all<{ id: string; sort_order: number }>();
   const index = all.findIndex((p) => p.id === id);
   const swapWith = direction === "up" ? index - 1 : index + 1;
   if (index < 0 || swapWith < 0 || swapWith >= all.length) return;
 
   const now = touch();
-  const tx = db.transaction(() => {
-    db.prepare("UPDATE products SET sort_order = ?, updated_at = ? WHERE id = ?").run(
-      all[index].sort_order,
-      now,
-      all[swapWith].id,
-    );
-    db.prepare("UPDATE products SET sort_order = ?, updated_at = ? WHERE id = ?").run(
-      all[swapWith].sort_order,
-      now,
-      all[index].id,
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .prepare("UPDATE products SET sort_order = ?, updated_at = ? WHERE id = ?")
+      .run(all[index].sort_order, now, all[swapWith].id);
+    await tx
+      .prepare("UPDATE products SET sort_order = ?, updated_at = ? WHERE id = ?")
+      .run(all[swapWith].sort_order, now, all[index].id);
   });
-  tx();
   invalidateCatalog();
 }
 
 /** Replace a product's image list (used by the media picker in the editor). */
-export function setProductImages(id: string, images: ProductInput["images"]): void {
-  const db = getDb();
-  db.transaction(() => writeImages(id, images))();
-  db.prepare("UPDATE products SET updated_at = ? WHERE id = ?").run(touch(), id);
+export async function setProductImages(id: string, images: ProductInput["images"]): Promise<void> {
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    await writeImages(tx, id, images);
+    await tx.prepare("UPDATE products SET updated_at = ? WHERE id = ?").run(touch(), id);
+  });
   invalidateCatalog();
 }
 
@@ -444,9 +449,10 @@ export function setProductImages(id: string, images: ProductInput["images"]): vo
 /* Categories                                                           */
 /* ------------------------------------------------------------------ */
 
-export function createCategory(input: CategoryInput): string {
+export async function createCategory(input: CategoryInput): Promise<string> {
   const id = randomUUID();
-  getDb()
+  const db = await getDb();
+  await db
     .prepare(
       `INSERT INTO categories (id, slug, name_ar, name_en, sort_order, active, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
@@ -456,8 +462,9 @@ export function createCategory(input: CategoryInput): string {
   return id;
 }
 
-export function updateCategory(id: string, input: CategoryInput): void {
-  getDb()
+export async function updateCategory(id: string, input: CategoryInput): Promise<void> {
+  const db = await getDb();
+  await db
     .prepare(
       "UPDATE categories SET slug = ?, name_ar = ?, name_en = ?, sort_order = ?, active = ? WHERE id = ?",
     )
@@ -465,9 +472,9 @@ export function updateCategory(id: string, input: CategoryInput): void {
   invalidateCatalog();
 }
 
-export function deleteCategory(id: string): void {
-  const db = getDb();
+export async function deleteCategory(id: string): Promise<void> {
+  const db = await getDb();
   // Products keep their data: category_id goes NULL (ON DELETE SET NULL).
-  db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM categories WHERE id = ?").run(id);
   invalidateCatalog();
 }

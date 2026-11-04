@@ -10,7 +10,7 @@ export const metadata = { title: "التصنيفات · Admin" };
 export default async function AdminCategoriesPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const categories = listCategoriesAdmin();
+  const categories = await listCategoriesAdmin();
 
   return (
     <div className="space-y-5">

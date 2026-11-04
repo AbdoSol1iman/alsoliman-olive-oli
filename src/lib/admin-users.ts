@@ -43,24 +43,28 @@ export function verifyPassword(password: string, stored: string): boolean {
   }
 }
 
-export const listAdminUsers = () =>
-  getDb()
+export const listAdminUsers = async () => {
+  const db = await getDb();
+  return db
     .prepare(
       "SELECT id, email, name, token_version, role, created_at, updated_at, last_login_at FROM admin_users ORDER BY created_at",
     )
-    .all() as AdminUser[];
+    .all<AdminUser>();
+};
 
-export const findAdminByEmail = (email: string) =>
-  getDb().prepare("SELECT * FROM admin_users WHERE email = ?").get(email.trim().toLowerCase()) as
-    | (AdminUser & { password_hash: string })
-    | undefined;
+export const findAdminByEmail = async (email: string) => {
+  const db = await getDb();
+  return db
+    .prepare("SELECT * FROM admin_users WHERE email = ?")
+    .get<AdminUser & { password_hash: string }>(email.trim().toLowerCase());
+};
 
-export const findAdminById = (id: string) =>
-  getDb().prepare("SELECT * FROM admin_users WHERE id = ?").get(id) as
-    | (AdminUser & { password_hash: string })
-    | undefined;
+export const findAdminById = async (id: string) => {
+  const db = await getDb();
+  return db.prepare("SELECT * FROM admin_users WHERE id = ?").get<AdminUser & { password_hash: string }>(id);
+};
 
-export function createAdminUser({
+export async function createAdminUser({
   email,
   password,
   name = "",
@@ -70,56 +74,62 @@ export function createAdminUser({
   password: string;
   name?: string;
   role?: "owner" | "admin";
-}): AdminUser {
+}): Promise<AdminUser> {
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
-  getDb()
+  const db = await getDb();
+  await db
     .prepare(
       `INSERT INTO admin_users (id, email, name, password_hash, token_version, role, created_at, updated_at)
        VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
     )
     .run(id, email.trim().toLowerCase(), name.trim(), hashPassword(password), role, now, now);
-  return findAdminById(id)!;
+  return (await findAdminById(id))!;
 }
 
-export function updateAdminPassword(id: string, password: string) {
+export async function updateAdminPassword(id: string, password: string) {
   // Bumping token_version invalidates every session ever issued to this user.
-  getDb()
+  const db = await getDb();
+  await db
     .prepare("UPDATE admin_users SET password_hash = ?, token_version = token_version + 1, updated_at = ? WHERE id = ?")
     .run(hashPassword(password), new Date().toISOString(), id);
 }
 
 /** Invalidate every outstanding session for a user (without touching the hash). */
-export function bumpTokenVersion(id: string) {
-  getDb()
+export async function bumpTokenVersion(id: string) {
+  const db = await getDb();
+  await db
     .prepare("UPDATE admin_users SET token_version = token_version + 1, updated_at = ? WHERE id = ?")
     .run(new Date().toISOString(), id);
 }
 
-export function updateAdminProfile(id: string, { name, email }: { name: string; email: string }) {
-  getDb()
+export async function updateAdminProfile(id: string, { name, email }: { name: string; email: string }) {
+  const db = await getDb();
+  await db
     .prepare("UPDATE admin_users SET name = ?, email = ?, updated_at = ? WHERE id = ?")
     .run(name.trim(), email.trim().toLowerCase(), new Date().toISOString(), id);
 }
 
-export function touchLastLogin(id: string) {
-  getDb().prepare("UPDATE admin_users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+export async function touchLastLogin(id: string) {
+  const db = await getDb();
+  await db.prepare("UPDATE admin_users SET last_login_at = ? WHERE id = ?").run(new Date().toISOString(), id);
 }
 
-export function deleteAdminUser(id: string) {
-  const db = getDb();
-  const owners = db
+export async function deleteAdminUser(id: string) {
+  const db = await getDb();
+  const owners = (await db
     .prepare("SELECT COUNT(*) AS n FROM admin_users WHERE role = 'owner' AND id != ?")
-    .get(id) as { n: number };
-  const target = findAdminById(id);
+    .get<{ n: number }>(id))!;
+  const target = await findAdminById(id);
   if (target?.role === "owner" && owners.n === 0) {
     throw new Error("cannot_delete_last_owner");
   }
-  db.prepare("DELETE FROM admin_users WHERE id = ?").run(id);
+  await db.prepare("DELETE FROM admin_users WHERE id = ?").run(id);
 }
 
-export function countAdminUsers() {
-  return (getDb().prepare("SELECT COUNT(*) AS n FROM admin_users").get() as { n: number }).n;
+export async function countAdminUsers() {
+  const db = await getDb();
+  return (await db.prepare("SELECT COUNT(*) AS n FROM admin_users").get<{ n: number }>())!.n;
 }
 
 /**
@@ -127,9 +137,9 @@ export function countAdminUsers() {
  * the environment (or well-known dev credentials outside production). This is
  * the only moment env credentials are ever used.
  */
-export function ensureSeedAdmin() {
-  if (countAdminUsers() > 0) return;
+export async function ensureSeedAdmin() {
+  if ((await countAdminUsers()) > 0) return;
   const email = (process.env.ADMIN_EMAIL ?? "admin@alsuliman.local").trim();
   const password = process.env.ADMIN_PASSWORD ?? "alsuliman-dev";
-  createAdminUser({ email, password, name: "المالك", role: "owner" });
+  await createAdminUser({ email, password, name: "المالك", role: "owner" });
 }

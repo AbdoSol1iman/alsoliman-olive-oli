@@ -20,11 +20,11 @@ export default async function AdminOrderPage({
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
   const { reference } = await params;
-  const result = getOrderByReference(reference);
+  const result = await getOrderByReference(reference);
   if (!result) notFound();
   const { order, items } = result;
-  const notes = getOrderNotes(order.id);
-  const settings = getSettingsAdmin();
+  const notes = await getOrderNotes(order.id);
+  const settings = await getSettingsAdmin();
   const zone = settings.shipping.zones[order.governorate];
   const waHref = `https://wa.me/${order.phone.replace(/\D/g, "")}`;
 
