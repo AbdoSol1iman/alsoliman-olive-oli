@@ -4,16 +4,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ProductDetail } from "@/components/store/ProductDetail";
 import { ProductCard } from "@/components/store/ProductCard";
-import { getDictionary } from "@/lib/i18n";
-import { getProduct, listingItems, products, type Locale } from "@/lib/products";
+import { getCatalog } from "@/lib/catalog";
+import { getSiteDictionary } from "@/lib/content";
+import { buildListingItems, getProduct, type Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
 
-export function generateStaticParams() {
-  return ["ar", "en"].flatMap((locale) =>
-    products.map((p) => ({ locale, slug: p.slug })),
-  );
-}
+// Reads searchParams (size) — a blocking, per-request route.
+export const instant = false;
 
 export async function generateMetadata({
   params,
@@ -21,8 +19,9 @@ export async function generateMetadata({
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
   const { locale, slug } = await params;
-  const product = getProduct(slug);
-  if (!product) return {};
+  const { products } = await getCatalog();
+  const product = getProduct(products, slug);
+  if (!product || !product.active) return {};
   const isAr = locale !== "en";
   const name = isAr ? product.nameAr : product.nameEn;
   return {
@@ -79,14 +78,14 @@ async function ProductBody({
 }) {
   const { locale, slug } = await params;
   if (!isLocale(locale)) notFound();
-  const product = getProduct(slug);
-  if (!product) notFound();
+  const [{ products }, dict] = await Promise.all([getCatalog(), getSiteDictionary(locale)]);
+  const product = getProduct(products, slug);
+  if (!product || !product.active) notFound();
   const { size } = await searchParams;
-  const dict = getDictionary(locale);
   const isAr = locale === "ar";
 
   const currentVariantId = product.variants.find((v) => v.id === size)?.id ?? product.variants[0].id;
-  const related = listingItems.filter(
+  const related = buildListingItems(products).filter(
     (item) => item.product.id === product.id && item.variant.id !== currentVariantId,
   );
   const jsonLd = !product.sample

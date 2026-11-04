@@ -6,6 +6,11 @@
  * components/actions. That lets the proxy reject unauthenticated `/admin`
  * requests before any page renders, which also keeps Next's `instant`
  * navigation validator quiet (no render-time redirect during prefetch).
+ *
+ * The token carries `tv` (token version) — a per-user counter that is bumped
+ * whenever the password changes, so every previously issued session becomes
+ * invalid immediately. The proxy only checks the signature (no DB access);
+ * `requireAdmin()` re-checks `tv` against the database as defence in depth.
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -38,15 +43,17 @@ export function sessionSecret() {
 const sign = (payload: string) =>
   createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
 
-export function issueToken(email: string, now = Date.now()) {
+export function issueToken(email: string, tokenVersion = 0, now = Date.now()) {
   const payload = Buffer.from(
-    JSON.stringify({ email, exp: now + SESSION_MAX_AGE * 1000 }),
+    JSON.stringify({ email, tv: tokenVersion, exp: now + SESSION_MAX_AGE * 1000 }),
   ).toString("base64url");
   return `${payload}.${sign(payload)}`;
 }
 
+export type TokenPayload = { email: string; tv: number };
+
 /** Constant-time signature check; returns the payload or null. */
-export function verifyToken(token: string | undefined): { email: string } | null {
+export function verifyToken(token: string | undefined): TokenPayload | null {
   if (!token) return null;
   const [payload, signature] = token.split(".");
   if (!payload || !signature) return null;
@@ -60,10 +67,12 @@ export function verifyToken(token: string | undefined): { email: string } | null
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString()) as {
       email: string;
+      tv?: number;
       exp: number;
     };
     if (!data.exp || data.exp < Date.now()) return null;
-    return { email: data.email };
+    if (!data.email) return null;
+    return { email: data.email, tv: typeof data.tv === "number" ? data.tv : 0 };
   } catch {
     return null;
   }

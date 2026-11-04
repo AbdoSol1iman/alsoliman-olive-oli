@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ArrowEnd, Check, Plus } from "@/components/ui/Icons";
 import { useCartStore } from "@/lib/cart-store";
+import { useAddToCart } from "@/lib/catalog-client";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { ListingItem, Locale } from "@/lib/products";
@@ -24,16 +25,21 @@ export function ProductCard({
   priority?: boolean;
 }) {
   const { product, variant } = item;
-  const add = useCartStore((s) => s.add);
+  const add = useAddToCart();
+  const openCart = useCartStore((s) => s.open);
   const [justAdded, setJustAdded] = useState(false);
   const href = `/${locale}/product/${product.slug}?size=${variant.id}`;
   const soldOut = variant.stock !== null && variant.stock <= 0;
-  const low = variant.stock !== null && variant.stock > 0 && variant.stock <= 5;
+  const low =
+    variant.stock !== null &&
+    variant.stock > 0 &&
+    variant.stock <= (product.lowStockThreshold || 5);
   const name = locale === "ar" ? product.nameAr : product.nameEn;
   const size = locale === "ar" ? variant.sizeLabelAr : variant.sizeLabelEn;
 
   const onQuickAdd = () => {
     add(product.id, variant.id, 1);
+    openCart();
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1800);
   };

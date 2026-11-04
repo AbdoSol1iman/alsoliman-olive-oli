@@ -3,12 +3,19 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Check } from "@/components/ui/Icons";
-import { contact } from "@/lib/config";
 import { cx } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
-export function ContactForm({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function ContactForm({
+  locale,
+  dict,
+  whatsappNumber,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  whatsappNumber: string;
+}) {
   const [sent, setSent] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", phone: "", message: "" });
   const [error, setError] = useState("");
@@ -42,9 +49,9 @@ export function ContactForm({ locale, dict }: { locale: Locale; dict: Dictionary
           <p className="mt-4 font-display text-[1.3rem] text-forest">
             {configured ? dict.contact.sent : dict.contact.notConfigured}
           </p>
-          {!configured && contact.whatsappNumber ? (
+          {!configured && whatsappNumber ? (
             <a
-              href={`https://wa.me/${contact.whatsappNumber}`}
+              href={`https://wa.me/${whatsappNumber}`}
               target="_blank"
               rel="noreferrer noopener"
               className="mt-5 inline-block text-[0.8rem] text-forest underline decoration-gold/50 underline-offset-4"

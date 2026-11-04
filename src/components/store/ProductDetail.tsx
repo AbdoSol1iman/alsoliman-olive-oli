@@ -6,7 +6,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
 import { Check, Drop, Leaf, Truck } from "@/components/ui/Icons";
-import { useCartStore } from "@/lib/cart-store";
+import { useAddToCart } from "@/lib/catalog-client";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale, Product, Variant } from "@/lib/products";
@@ -28,7 +28,7 @@ export function ProductDetail({
   const [qty, setQty] = useState(1);
   const [imageIndex, setImageIndex] = useState(0);
   const [added, setAdded] = useState(false);
-  const add = useCartStore((s) => s.add);
+  const add = useAddToCart();
 
   const soldOut = variant.stock !== null && variant.stock <= 0;
   const name = locale === "ar" ? product.nameAr : product.nameEn;

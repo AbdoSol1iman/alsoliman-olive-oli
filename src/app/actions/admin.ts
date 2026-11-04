@@ -2,43 +2,130 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { clearSession, getSession, issueSession, verifyCredentials } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { z } from "zod";
+import { clearSession, getSession, issueSession, requireAdmin, verifyCredentials } from "@/lib/auth";
+import {
+  bumpTokenVersion,
+  createAdminUser,
+  deleteAdminUser,
+  findAdminById,
+  listAdminUsers,
+  updateAdminPassword,
+  updateAdminProfile,
+} from "@/lib/admin-users";
+import { emailSchema, passwordSchema } from "@/lib/admin-schemas";
 
-export async function loginAction(_prev: string | null, formData: FormData) {
+export type ActionResult = { ok: true } | { ok: false; error: string };
+
+const fail = (error: string) => ({ ok: false as const, error });
+
+export async function loginAction(_prev: string | null, formData: FormData): Promise<string | null> {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  if (!verifyCredentials(email, password)) {
-    return "بيانات الدخول غير صحيحة.";
-  }
-  await issueSession(email);
+  const user = verifyCredentials(email, password);
+  if (!user) return "بيانات الدخول غير صحيحة.";
+  await issueSession(user);
   redirect("/admin");
 }
 
-export async function logoutAction() {
+export async function logoutAction(): Promise<void> {
   await clearSession();
   redirect("/admin/login");
 }
 
-export async function updateOrderStatusAction(formData: FormData) {
-  const session = await getSession();
-  if (!session) return { ok: false, error: "unauthorized" };
+/* ------------------------------------------------------------------ */
+/* Profile                                                              */
+/* ------------------------------------------------------------------ */
 
-  const reference = String(formData.get("reference") ?? "");
-  const status = String(formData.get("status") ?? "");
-  const allowed = ["pending", "confirmed", "shipped", "delivered", "cancelled"];
-  if (!reference || !allowed.includes(status)) return { ok: false, error: "invalid" };
+const profileSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  email: emailSchema,
+});
 
-  getDb()
-    .prepare("UPDATE orders SET status = ? WHERE reference = ?")
-    .run(status, reference);
+export async function updateProfileAction(input: z.infer<typeof profileSchema>): Promise<ActionResult> {
+  const session = await requireAdmin();
+  const parsed = profileSchema.safeParse(input);
+  if (!parsed.success) return fail("invalid_input");
 
-  revalidatePath("/admin");
-  revalidatePath("/admin/orders");
-  revalidatePath(`/admin/orders/${reference}`);
+  const duplicate = listAdminUsers().find(
+    (u) => u.email === parsed.data.email.toLowerCase() && u.id !== session.id,
+  );
+  if (duplicate) return fail("email_taken");
+
+  updateAdminProfile(session.id, parsed.data);
+  // Email is part of the signed token — bump the version and reissue so the
+  // current session stays valid and every other one dies.
+  bumpTokenVersion(session.id);
+  const user = findAdminById(session.id)!;
+  await issueSession(user);
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 
-export async function setOrderStatusAction(formData: FormData) {
-  await updateOrderStatusAction(formData);
+export async function changePasswordAction(input: {
+  current: string;
+  next: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+
+  const verified = verifyCredentials(session.email, input.current);
+  if (!verified || verified.id !== session.id) return fail("wrong_current_password");
+
+  const parsed = passwordSchema.safeParse(input.next);
+  if (!parsed.success) return fail("weak_password");
+  if (input.current === input.next) return fail("password_unchanged");
+
+  updateAdminPassword(session.id, input.next);
+  const user = findAdminById(session.id)!;
+  await issueSession(user); // fresh token carries the new version
+  return { ok: true };
+}
+
+/* ------------------------------------------------------------------ */
+/* Admin users (managed by owners from Settings)                        */
+/* ------------------------------------------------------------------ */
+
+const createAdminSchema = z.object({
+  email: emailSchema,
+  name: z.string().trim().max(80).default(""),
+  password: passwordSchema,
+  role: z.enum(["owner", "admin"]).default("admin"),
+});
+
+export async function createAdminAction(input: z.infer<typeof createAdminSchema>): Promise<ActionResult & { id?: string }> {
+  const session = await requireAdmin();
+  if (session.role !== "owner") return fail("forbidden");
+  const parsed = createAdminSchema.safeParse(input);
+  if (!parsed.success) return fail("invalid_input");
+
+  const existing = listAdminUsers().find((u) => u.email === parsed.data.email.toLowerCase());
+  if (existing) return fail("email_taken");
+
+  const user = createAdminUser(parsed.data);
+  revalidatePath("/admin", "layout");
+  void session;
+  return { ok: true, id: user.id };
+}
+
+export async function deleteAdminAction(userId: string): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (session.role !== "owner") return fail("forbidden");
+  if (userId === session.id) return fail("cannot_delete_self");
+  try {
+    deleteAdminUser(userId);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
+  revalidatePath("/admin", "layout");
+  return { ok: true };
+}
+
+export async function resetAdminPasswordAction(userId: string, password: string): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (session.role !== "owner") return fail("forbidden");
+  const parsed = passwordSchema.safeParse(password);
+  if (!parsed.success) return fail("weak_password");
+  if (!findAdminById(userId)) return fail("not_found");
+  updateAdminPassword(userId, password);
+  return { ok: true };
 }

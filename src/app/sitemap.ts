@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { products } from "@/lib/products";
+import { getCatalog } from "@/lib/catalog";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -15,8 +15,10 @@ const staticPaths = [
   { path: "/terms", frequency: "yearly" as const, priority: 0.2 },
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
+  const { products } = await getCatalog();
+  const active = products.filter((p) => p.active);
 
   const pages = (["ar", "en"] as const).flatMap((locale) =>
     staticPaths.map(({ path, frequency, priority }) => ({
@@ -28,7 +30,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   );
 
   const productPages = (["ar", "en"] as const).flatMap((locale) =>
-    products.map((product) => ({
+    active.map((product) => ({
       url: `${siteUrl}/${locale}/product/${product.slug}`,
       lastModified,
       changeFrequency: "monthly" as const,

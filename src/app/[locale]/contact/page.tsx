@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ContactForm } from "@/components/store/ContactForm";
 import { Whatsapp, Mail, Phone, Pin } from "@/components/ui/Icons";
-import { contact } from "@/lib/config";
-import { getDictionary } from "@/lib/i18n";
+import { getSettings } from "@/lib/settings";
+import { getSiteDictionary } from "@/lib/content";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -26,8 +26,9 @@ export async function generateMetadata({
 export default async function ContactPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const dict = getDictionary(locale);
+  const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
   const isAr = locale === "ar";
+  const contact = settings.contact;
 
   const channels = [
     contact.whatsappNumber && {
@@ -62,7 +63,7 @@ export default async function ContactPage({ params }: { params: Promise<{ locale
 
       <section className="paper py-16 md:py-20">
         <div className="container-page grid gap-12 lg:grid-cols-[1fr_0.75fr] lg:gap-16">
-          <ContactForm locale={locale} dict={dict} />
+          <ContactForm locale={locale} dict={dict} whatsappNumber={contact.whatsappNumber} />
 
           <aside className="space-y-8">
             <div className="border border-gold/20 bg-cream/30 p-6">

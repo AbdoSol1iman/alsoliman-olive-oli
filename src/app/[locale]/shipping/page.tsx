@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ButtonLink } from "@/components/ui/Button";
-import { shipping, type ZoneKey } from "@/lib/config";
+import { getSettings } from "@/lib/settings";
+import { getSiteDictionary } from "@/lib/content";
 import { formatPrice } from "@/lib/format";
-import { getDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -28,9 +28,10 @@ export async function generateMetadata({
 export default async function ShippingPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const dict = getDictionary(locale);
+  const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
   const isAr = locale === "ar";
-  const zones = Object.entries(shipping.zones) as [ZoneKey, (typeof shipping.zones)[ZoneKey]][];
+  const shipping = settings.shipping;
+  const zones = Object.entries(shipping.zones);
 
   return (
     <>
@@ -50,6 +51,14 @@ export default async function ShippingPage({ params }: { params: Promise<{ local
                   <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-gold" />
                   {dict.shippingPage.freeWholesaleLine.replace("{n}", String(shipping.wholesaleMinQty))}
                 </li>
+                {shipping.freeThreshold !== null && shipping.freeThreshold > 0 ? (
+                  <li className="flex items-start gap-2">
+                    <span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-gold" />
+                    {isAr
+                      ? `شحن مجاني للطلبات التي تصل قيمتها إلى ${formatPrice(shipping.freeThreshold, locale)}`
+                      : `Free shipping on orders reaching ${formatPrice(shipping.freeThreshold, locale)}`}
+                  </li>
+                ) : null}
               </ul>
             </div>
 

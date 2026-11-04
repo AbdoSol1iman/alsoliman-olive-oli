@@ -6,12 +6,13 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ArrowEnd, Leaf, Ruler, Shield, Sparkle } from "@/components/ui/Icons";
-import { listingItems } from "@/lib/products";
-import { flags } from "@/lib/config";
+import type { ListingItem } from "@/lib/products";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 const trustIcons = [Shield, Leaf, Sparkle, Ruler];
+
+const DEFAULT_BOTTLE = "/products/bottle-cutout.png";
 
 export function TrustStrip({ dict }: { dict: Dictionary }) {
   return (
@@ -40,7 +41,17 @@ export function TrustStrip({ dict }: { dict: Dictionary }) {
   );
 }
 
-export function FeaturedProducts({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function FeaturedProducts({
+  locale,
+  dict,
+  items,
+  sampleCatalog,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  items: ListingItem[];
+  sampleCatalog: boolean;
+}) {
   return (
     <section className="paper py-20 md:py-28" aria-labelledby="featured-title">
       <div className="container-page">
@@ -59,7 +70,7 @@ export function FeaturedProducts({ locale, dict }: { locale: Locale; dict: Dicti
           }
         />
 
-        {flags.sampleCatalog ? (
+        {sampleCatalog ? (
           <p className="mt-6 inline-flex items-center gap-2 text-[0.68rem] text-gold/90">
             <span aria-hidden className="size-1 rounded-full bg-gold" />
             {dict.shop.sampleNotice}
@@ -67,7 +78,7 @@ export function FeaturedProducts({ locale, dict }: { locale: Locale; dict: Dicti
         ) : null}
 
         <div className="mt-10 grid grid-cols-2 gap-x-5 gap-y-12 md:mt-14 md:grid-cols-3 md:gap-x-10">
-          {listingItems.map((item, i) => (
+          {items.map((item, i) => (
             <Reveal key={item.key} delay={i * 90} as="div">
               <ProductCard item={item} locale={locale} dict={dict} priority={i === 0} />
             </Reveal>
@@ -78,7 +89,16 @@ export function FeaturedProducts({ locale, dict }: { locale: Locale; dict: Dicti
   );
 }
 
-export function StorySection({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function StorySection({
+  locale,
+  dict,
+  image,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  /** Optional owner-supplied image (media library path). */
+  image?: string;
+}) {
   return (
     <section className="relative overflow-hidden bg-forest text-ivory" aria-labelledby="story-title">
       <OliveBranch
@@ -119,7 +139,7 @@ export function StorySection({ locale, dict }: { locale: Locale; dict: Dictionar
               className="absolute inset-x-[15%] top-[8%] bottom-0 rounded-t-[999px] border border-gold/30"
             />
             <Image
-              src="/products/bottle-cutout.png"
+              src={image || DEFAULT_BOTTLE}
               alt={
                 locale === "ar"
                   ? "زجاجة زيت الزيتون من آل سليمان على خلفية كريمية"
@@ -145,7 +165,16 @@ export function StorySection({ locale, dict }: { locale: Locale; dict: Dictionar
   );
 }
 
-export function WhySection({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function WhySection({
+  locale,
+  dict,
+  image,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  /** Optional owner-supplied image (media library path). */
+  image?: string;
+}) {
   return (
     <section className="paper py-20 md:py-28" aria-labelledby="why-title">
       <div className="container-page grid gap-14 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-20">
@@ -158,7 +187,7 @@ export function WhySection({ locale, dict }: { locale: Locale; dict: Dictionary 
                 className="absolute inset-x-[10%] top-[10%] bottom-[8%] rounded-full bg-ivory/50"
               />
               <Image
-                src="/products/bottle-cutout.png"
+                src={image || DEFAULT_BOTTLE}
                 alt={
                   locale === "ar"
                     ? "عبوة زيت الزيتون ١ لتر من آل سليمان"

@@ -7,7 +7,10 @@ import { CartDrawer } from "@/components/layout/CartDrawer";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { WhatsAppButton } from "@/components/layout/WhatsAppButton";
-import { getDictionary } from "@/lib/i18n";
+import { CatalogProvider } from "@/lib/catalog-client";
+import { getCatalog } from "@/lib/catalog";
+import { getSettings } from "@/lib/settings";
+import { getSiteDictionary } from "@/lib/content";
 import type { Locale } from "@/lib/products";
 
 
@@ -16,23 +19,30 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
-  title: {
-    default: "آل سليمان | زيت زيتون بكر ممتاز",
-    template: "%s | آل سليمان",
-  },
-  description:
-    "زيت زيتون بكر ممتاز من آل سليمان — عناية بالجودة، طعم أصيل، وتوصيل لجميع محافظات مصر.",
-  openGraph: {
-    type: "website",
-    locale: "ar_EG",
-    siteName: "آل سليمان",
-    title: "آل سليمان | زيت زيتون بكر ممتاز",
-    description: "زيت زيتون بكر ممتاز، بمذاق أصيل لمائدتك.",
-  },
-  icons: { icon: "/favicon.ico" },
-};
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string }>;
+}): Promise<Metadata> {
+  const { locale: raw } = await params;
+  const isAr = raw !== "en";
+  const settings = await getSettings();
+  const title = isAr ? settings.seo.titleAr : settings.seo.titleEn;
+  const description = isAr ? settings.seo.descriptionAr : settings.seo.descriptionEn;
+  return {
+    metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+    title: { default: title, template: `%s | ${isAr ? settings.store.nameAr : settings.store.nameEn}` },
+    description,
+    openGraph: {
+      type: "website",
+      locale: isAr ? "ar_EG" : "en_US",
+      siteName: isAr ? settings.store.nameAr : settings.store.nameEn,
+      title,
+      description,
+    },
+    icons: { icon: "/favicon.ico" },
+  };
+}
 
 export function generateStaticParams() {
   return [{ locale: "ar" }, { locale: "en" }];
@@ -48,7 +58,20 @@ export default async function LocaleLayout({
   const { locale: raw } = await params;
   if (raw !== "ar" && raw !== "en") notFound();
   const locale = raw as Locale;
-  const dict = getDictionary(locale);
+  const [settings, { products }, dict] = await Promise.all([
+    getSettings(),
+    getCatalog(),
+    getSiteDictionary(locale),
+  ]);
+
+  const contact = {
+    instagram: settings.contact.instagram,
+    facebook: settings.contact.facebook,
+    whatsappNumber: settings.contact.whatsappNumber,
+    phoneDisplay: settings.contact.phoneDisplay,
+    email: settings.contact.email,
+  };
+  const announcements = settings.announcements[locale] ?? settings.announcements.ar;
 
   return (
     <html
@@ -65,14 +88,16 @@ export default async function LocaleLayout({
         >
           {locale === "ar" ? "تخطَّ إلى المحتوى" : "Skip to content"}
         </a>
-        <AnnouncementBar locale={locale} />
-        <Header locale={locale} dict={dict} />
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-        <Footer locale={locale} dict={dict} />
-        <CartDrawer locale={locale} dict={dict} />
-        <WhatsAppButton dict={dict} />
+        <CatalogProvider products={products}>
+          <AnnouncementBar locale={locale} items={announcements} />
+          <Header locale={locale} dict={dict} logoSrc={settings.store.logoPath} />
+          <main id="main" className="flex-1">
+            {children}
+          </main>
+          <Footer locale={locale} dict={dict} contact={contact} logoSrc={settings.store.logoPath} />
+          <CartDrawer locale={locale} dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
+          <WhatsAppButton dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
+        </CatalogProvider>
       </body>
     </html>
   );

@@ -1,10 +1,15 @@
-import { contact } from "@/lib/config";
 import { Whatsapp } from "@/components/ui/Icons";
 import type { Dictionary } from "@/lib/i18n";
 
-export function WhatsAppButton({ dict }: { dict: Dictionary }) {
-  if (!contact.whatsappNumber) return null;
-  const href = `https://wa.me/${contact.whatsappNumber}?text=${encodeURIComponent(dict.whatsapp.defaultMessage)}`;
+export function WhatsAppButton({
+  dict,
+  whatsappNumber,
+}: {
+  dict: Dictionary;
+  whatsappNumber: string;
+}) {
+  if (!whatsappNumber) return null;
+  const href = `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(dict.whatsapp.defaultMessage)}`;
 
   return (
     <a

@@ -72,19 +72,23 @@ export function Logo({
   variant = "inline",
   tone = "forest",
   className,
+  src,
 }: {
   locale: Locale;
   variant?: "inline" | "stacked";
   tone?: "forest" | "ivory";
   className?: string;
+  /** Overrides the default logo file (settings-driven). */
+  src?: string;
 }) {
   const name = locale === "ar" ? brand.fullNameAr : brand.fullNameEn;
   const subline = locale === "ar" ? brand.markSublineAr : brand.markSublineEn;
+  const logoSrc = src || brand.logoImage;
 
   if (brand.logoMode === "image") {
     // Stacked logo — needs more height than a horizontal mark to stay legible.
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={brand.logoImage} alt={name} className={cx("h-16 w-auto md:h-20", className)} />;
+    return <img src={logoSrc} alt={name} className={cx("h-16 w-auto md:h-20", className)} />;
   }
 
   if (variant === "stacked") {

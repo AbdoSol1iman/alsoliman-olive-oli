@@ -7,21 +7,23 @@ export default async function AdminLoginPage() {
   if (session) redirect("/admin");
 
   return (
-    <div className="mx-auto max-w-sm">
-      <div className="border border-gold/25 bg-ivory p-8">
+    <div>
+      <div className="border border-gold/25 bg-ivory p-8 shadow-soft">
         <h1 className="text-[1.5rem]">لوحة التحكم</h1>
-        <p className="mt-1.5 text-[0.8rem] text-ink-muted">
-          الدخول للإدارة مخصص للمالك فقط.
+        <p className="mt-1.5 text-[0.8rem] leading-6 text-ink-muted">
+          الدخول للإدارة مخصص لصاحب المتجر فقط.
         </p>
         <div className="mt-6">
           <AdminLoginForm />
         </div>
       </div>
-      <p className="mt-4 text-center text-[0.7rem] leading-6 text-ink-muted">
-        في بيئة التطوير: admin@alsuliman.local / alsuliman-dev
-        <br />
-        يُفضّل ضبط ADMIN_EMAIL و ADMIN_PASSWORD و SESSION_SECRET في الإنتاج.
-      </p>
+      {process.env.NODE_ENV !== "production" ? (
+        <p className="mt-4 text-center text-[0.7rem] leading-6 text-ink-muted">
+          بيئة التطوير: admin@alsuliman.local / alsuliman-dev
+          <br />
+          يُفضّل ضبط ADMIN_EMAIL و ADMIN_PASSWORD و ADMIN_SESSION_SECRET في الإنتاج.
+        </p>
+      ) : null}
     </div>
   );
 }

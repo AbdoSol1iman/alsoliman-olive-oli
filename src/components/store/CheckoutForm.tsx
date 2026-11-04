@@ -7,21 +7,34 @@ import { useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Chevron, Check, Shield } from "@/components/ui/Icons";
 import { submitOrder } from "@/app/actions/orders";
-import { useCartLines, useCartStore } from "@/lib/cart-store";
+import { useCartLines } from "@/lib/catalog-client";
+import { useCartStore } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { checkoutSchema, fieldErrors } from "@/lib/checkout-schema";
-import { payments, shipping, shippingFeeFor, isFreeCity, isWholesale, type ZoneKey } from "@/lib/config";
+import {
+  checkoutFeeFor,
+  isFreeCityFor,
+  isWholesaleFor,
+  type CheckoutConfig,
+} from "@/lib/fee";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 type Errors = Record<string, string>;
 
-/** Shipping zones as a stable list (module scope → no per-render memo). */
-const zones = Object.entries(shipping.zones) as [ZoneKey, (typeof shipping.zones)[ZoneKey]][];
-
-
-export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function CheckoutForm({
+  locale,
+  dict,
+  config,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  /** Shipping/payment settings resolved server-side from the database. */
+  config: CheckoutConfig;
+}) {
+  /** Shipping zones as a stable list (derived per render from config). */
+  const zones = Object.entries(config.zones);
   const lines = useCartLines();
   const clear = useCartStore((s) => s.clear);
   const router = useRouter();
@@ -33,7 +46,7 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
-    governorate: "" as "" | ZoneKey,
+    governorate: "",
     city: "",
     address: "",
     notes: "",
@@ -55,14 +68,19 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
   const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
   const totalQty = lines.reduce((s, l) => s + l.qty, 0);
   const zoneFee = form.governorate
-    ? shippingFeeFor({ governorate: form.governorate, city: form.city, totalQty })
+    ? checkoutFeeFor(config, {
+        governorate: form.governorate,
+        city: form.city,
+        totalQty,
+        subtotal,
+      })
     : null;
   const shippingFee = zoneFee ?? 0;
   const freeReason =
     zoneFee === 0
-      ? isFreeCity(form.city)
+      ? isFreeCityFor(config, form.city)
         ? ("city" as const)
-        : isWholesale(totalQty)
+        : isWholesaleFor(config, totalQty)
           ? ("wholesale" as const)
           : null
       : null;
@@ -113,7 +131,15 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
       const result = await submitOrder(parsed.data);
       if (!result.ok) {
         // The key is kept so a retry of the same attempt can never double-charge.
-        setFormError(dict.checkout.errorGeneric);
+        // Surface the real reason instead of one generic message: the customer
+        // can act on "item gone" / "governorate changed", but not on a blank slate.
+        setFormError(
+          result.code === "unavailable"
+            ? dict.checkout.errorUnavailable
+            : result.code === "invalid_zone"
+              ? dict.checkout.errorZone
+              : dict.checkout.errorGeneric,
+        );
         setSubmitting(false);
         return;
       }
@@ -123,7 +149,9 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
       clear();
       router.push(`/${locale}/order/${result.reference}`);
     } catch {
-      setFormError(dict.checkout.errorGeneric);
+      // The action never produced a result: offline, or the page predates the
+      // last deploy (server-action ids change per build → HTTP 400).
+      setFormError(dict.checkout.errorStale);
       setSubmitting(false);
     }
   };
@@ -303,14 +331,12 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
                   className="mt-1 accent-[#26311f]"
                 />
                 <span>
-                  <span className="block text-[0.88rem] text-forest">
-                    {locale === "ar" ? payments.cod.labelAr : payments.cod.labelEn}
-                  </span>
+                  <span className="block text-[0.88rem] text-forest">{dict.footer.cod}</span>
                   <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{dict.checkout.codDesc}</span>
                 </span>
               </label>
 
-              {payments.instapay.enabled ? (
+              {config.instapayEnabled ? (
                 <label
                   className={cx(
                     "flex cursor-pointer items-start gap-3 border p-4 transition-colors",
@@ -327,9 +353,9 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
                   />
                   <span>
                     <span className="block text-[0.88rem] text-forest">
-                      {locale === "ar" ? payments.instapay.labelAr : payments.instapay.labelEn}
+                      {locale === "ar" ? config.instapayLabelAr : config.instapayLabelEn}
                     </span>
-                    <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{payments.instapay.instructionsAr}</span>
+                    <span className="mt-0.5 block text-[0.75rem] text-ink-muted">{config.instapayInstructionsAr}</span>
                   </span>
                 </label>
               ) : null}
@@ -396,7 +422,7 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
               <p className="text-[0.7rem] leading-6 text-forest">{dict.checkout.freeCityNote}</p>
             ) : freeReason === "wholesale" ? (
               <p className="text-[0.7rem] leading-6 text-forest">
-                {dict.checkout.freeWholesaleNote.replace("{n}", String(shipping.wholesaleMinQty))}
+                {dict.checkout.freeWholesaleNote.replace("{n}", String(config.wholesaleMinQty))}
               </p>
             ) : null}
           </dl>
@@ -426,7 +452,7 @@ export function CheckoutForm({ locale, dict }: { locale: Locale; dict: Dictionar
             </Link>
           </p>
           <p className="mt-1 text-center text-[0.68rem] text-ink-muted">
-            {locale === "ar" ? shipping.notesAr : shipping.notesEn}
+            {locale === "ar" ? config.notesAr : config.notesEn}
           </p>
         </aside>
       </form>

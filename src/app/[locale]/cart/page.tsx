@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { CartView } from "@/components/store/CartView";
-import { getDictionary } from "@/lib/i18n";
+import { getSiteDictionary } from "@/lib/content";
+import { getSettings } from "@/lib/settings";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -21,10 +22,10 @@ export async function generateMetadata({
 export default async function CartPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const dict = getDictionary(locale);
+  const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
   return (
     <section className="paper min-h-[60vh]">
-      <CartView locale={locale} dict={dict} />
+      <CartView locale={locale} dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
     </section>
   );
 }

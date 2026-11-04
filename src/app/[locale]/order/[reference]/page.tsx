@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ButtonLink } from "@/components/ui/Button";
 import { Check, Whatsapp } from "@/components/ui/Icons";
-import { contact, shipping } from "@/lib/config";
+import { getSettings } from "@/lib/settings";
+import { getSiteDictionary } from "@/lib/content";
 import { formatDate, formatPrice } from "@/lib/format";
-import { getDictionary } from "@/lib/i18n";
 import { getOrderByReference } from "@/lib/orders";
 import type { Locale } from "@/lib/products";
 
@@ -28,7 +28,8 @@ export default async function OrderPage({
   const { locale: raw, reference } = await params;
   if (!isLocale(raw)) notFound();
   const locale = raw;
-  const dict = getDictionary(locale);
+  const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
+  const contact = settings.contact;
   const result = getOrderByReference(reference);
 
   if (!result) {
@@ -45,8 +46,8 @@ export default async function OrderPage({
 
   const { order, items } = result;
   const isAr = locale === "ar";
-  const zone = order.governorate as keyof typeof shipping.zones;
-  const govLabel = isAr ? shipping.zones[zone]?.ar : shipping.zones[zone]?.en;
+  const zone = order.governorate;
+  const govLabel = isAr ? settings.shipping.zones[zone]?.ar : settings.shipping.zones[zone]?.en;
 
   const waMessage = [
     isAr ? "مرحبًا آل سليمان،" : "Hello Alsuliman,",

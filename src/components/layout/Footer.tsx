@@ -1,17 +1,35 @@
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
 import { Instagram, Facebook, Mail, Phone, Whatsapp } from "@/components/ui/Icons";
-import { brand, contact, payments } from "@/lib/config";
+import { brand, payments } from "@/lib/config";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 const year = new Date().getFullYear();
 
-export function Footer({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export type FooterContact = {
+  instagram: string;
+  facebook: string;
+  whatsappNumber: string;
+  phoneDisplay: string;
+  email: string;
+};
+
+export function Footer({
+  locale,
+  dict,
+  contact,
+  logoSrc,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  contact: FooterContact;
+  logoSrc?: string;
+}) {
   const L = (href: string) => `/${locale}${href}`;
   const socials = [
-    { href: contact.social.instagram, label: "Instagram", Icon: Instagram },
-    { href: contact.social.facebook, label: "Facebook", Icon: Facebook },
+    { href: contact.instagram, label: "Instagram", Icon: Instagram },
+    { href: contact.facebook, label: "Facebook", Icon: Facebook },
   ].filter((s) => s.href);
 
   return (
@@ -28,7 +46,7 @@ export function Footer({ locale, dict }: { locale: Locale; dict: Dictionary }) {
       <div className="container-page relative py-16 md:py-20">
         <div className="grid gap-12 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <Logo locale={locale} variant="inline" tone="ivory" />
+            <Logo locale={locale} variant="inline" tone="ivory" src={logoSrc} />
             <p className="mt-5 max-w-xs text-[0.85rem] leading-7 text-sage/80">{dict.footer.blurb}</p>
 
             <div className="mt-6 flex items-center gap-3">

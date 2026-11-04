@@ -5,9 +5,10 @@ import { ProductCard } from "@/components/store/ProductCard";
 import { ShopFilters } from "@/components/store/ShopFilters";
 import { ButtonLink } from "@/components/ui/Button";
 import { OliveBranch } from "@/components/brand/Logo";
-import { flags } from "@/lib/config";
-import { getDictionary } from "@/lib/i18n";
-import { listingItems, type Locale } from "@/lib/products";
+import { getCatalog } from "@/lib/catalog";
+import { getSettings } from "@/lib/settings";
+import { getSiteDictionary } from "@/lib/content";
+import { buildListingItems, buildSizeFilters, type Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
 
@@ -38,7 +39,13 @@ export default async function ShopPage({
 }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const dict = getDictionary(locale);
+  const [dict, { products }, settings] = await Promise.all([
+    getSiteDictionary(locale),
+    getCatalog(),
+    getSettings(),
+  ]);
+  const items = buildListingItems(products);
+  const sizes = buildSizeFilters(products);
 
   return (
     <>
@@ -56,7 +63,7 @@ export default async function ShopPage({
           <p className="eyebrow">{dict.shop.eyebrow}</p>
           <h1 className="mt-4 text-[clamp(2.1rem,5vw,3.6rem)]">{dict.shop.title}</h1>
           <p className="mt-4 max-w-xl text-[0.92rem] leading-8 text-ink-muted">{dict.shop.body}</p>
-          {flags.sampleCatalog ? (
+          {settings.flags.sampleCatalog ? (
             <p className="mt-5 inline-flex items-center gap-2 rounded-xs border border-gold/30 bg-ivory/70 px-3 py-1.5 text-[0.68rem] text-gold">
               <span aria-hidden className="size-1 rounded-full bg-gold" />
               {dict.shop.sampleNotice}
@@ -66,7 +73,7 @@ export default async function ShopPage({
       </section>
 
       <Suspense fallback={<div className="h-24" />}>
-        <ShopResults locale={locale} searchParams={searchParams} />
+        <ShopResults locale={locale} dict={dict} items={items} sizes={sizes} searchParams={searchParams} />
       </Suspense>
     </>
   );
@@ -74,34 +81,39 @@ export default async function ShopPage({
 
 async function ShopResults({
   locale,
+  dict,
+  items,
+  sizes,
   searchParams,
 }: {
   locale: Locale;
+  dict: Awaited<ReturnType<typeof getSiteDictionary>>;
+  items: ReturnType<typeof buildListingItems>;
+  sizes: number[];
   searchParams: Promise<Search>;
 }) {
-  const dict = getDictionary(locale);
   const sp = await searchParams;
   const q = (sp.q ?? "").trim().toLowerCase();
   const size = sp.size ? Number(sp.size) : null;
   const sort = sp.sort ?? "relevance";
 
-  let items = listingItems.filter((item) => {
+  let filtered = items.filter((item) => {
     const name = `${item.product.nameAr} ${item.product.nameEn} ${item.variant.sizeLabelAr} ${item.variant.sizeLabelEn}`.toLowerCase();
     const matchesQuery = !q || name.includes(q);
     const matchesSize = !size || item.variant.ml === size;
     return matchesQuery && matchesSize;
   });
 
-  if (sort === "price-asc") items = [...items].sort((a, b) => a.variant.price - b.variant.price);
-  if (sort === "price-desc") items = [...items].sort((a, b) => b.variant.price - a.variant.price);
+  if (sort === "price-asc") filtered = [...filtered].sort((a, b) => a.variant.price - b.variant.price);
+  if (sort === "price-desc") filtered = [...filtered].sort((a, b) => b.variant.price - a.variant.price);
 
   return (
     <>
-      <ShopFilters locale={locale} dict={dict} resultCount={items.length} />
+      <ShopFilters locale={locale} dict={dict} resultCount={filtered.length} sizes={sizes} />
 
       <section className="paper py-14 md:py-20">
         <div className="container-page">
-          {items.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="mx-auto max-w-md border border-gold/25 bg-ivory px-8 py-14 text-center">
               <p className="font-display text-2xl text-forest">{dict.shop.noResults}</p>
               <p className="mt-3 text-[0.85rem] text-ink-muted">{dict.shop.noResultsBody}</p>
@@ -111,7 +123,7 @@ async function ShopResults({
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-x-5 gap-y-12 md:grid-cols-3 md:gap-x-10">
-              {items.map((item, i) => (
+              {filtered.map((item, i) => (
                 <ProductCard
                   key={item.key}
                   item={item}

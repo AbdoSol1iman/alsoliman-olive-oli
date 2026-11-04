@@ -186,6 +186,8 @@ const ar = {
     free: "مجاني",
     drawerTitle: "سلتك",
     drawerEmpty: "لا يوجد منتجات بعد.",
+    whatsappCheckout: "تأكيد الطلب عبر واتساب",
+    whatsappNote: "لا يُنشأ الطلب تلقائيًا — يتم تأكيد الطلب بعد التواصل معك عبر واتساب.",
     taxes: "الأسعار تشمل ضريبة القيمة المضافة إن وجدت.",
   },
   checkout: {
@@ -216,6 +218,13 @@ const ar = {
     placeOrder: "تأكيد الطلب",
     placing: "جارٍ إرسال الطلب…",
     errorGeneric: "لم نتمكن من إرسال الطلب. تحقق من البيانات وحاول مرة أخرى.",
+    /** The request never reached order creation (network / stale page after a deploy). */
+    errorStale:
+      "تعذر إرسال الطلب. تحقق من اتصالك، حدّث الصفحة، ثم أعد المحاولة.",
+    /** Server rejected the cart contents — a product/variant is no longer sellable. */
+    errorUnavailable: "أحد المنتجات في سلتك لم تعد متاحة. راجع السلة وحاول مرة أخرى.",
+    /** Governorate no longer exists in the owner-editable zone list. */
+    errorZone: "المحافظة المختارة غير متاحة حاليًا. اختر محافظة أخرى.",
     emptyCart: "سلتك فارغة، أضف منتجًا أولًا.",
     agree: "بتأكيد الطلب أنت توافق على الشروط والأحكام.",
     secureNote: "لا نحتفظ ببيانات بطاقات الدفع، ولا يتم أي خصم تلقائي.",
@@ -235,6 +244,7 @@ const ar = {
     statuses: {
       pending: "بانتظار التأكيد",
       confirmed: "تم التأكيد",
+      processing: "قيد التجهيز",
       shipped: "في الطريق",
       delivered: "تم التوصيل",
       cancelled: "ملغي",
@@ -471,6 +481,8 @@ const en: Dictionary = {
     shippingNote: "Calculated after choosing a governorate", total: "Total", checkout: "Checkout",
     remove: "Remove", continue: "Continue shopping", free: "Free",
     drawerTitle: "Your cart", drawerEmpty: "No items yet.",
+    whatsappCheckout: "Confirm order via WhatsApp",
+    whatsappNote: "No order is created automatically — your order is confirmed after we chat on WhatsApp.",
     taxes: "Prices include VAT where applicable.",
   },
   checkout: {
@@ -490,6 +502,10 @@ const en: Dictionary = {
     freeWholesaleNote: "Free shipping on wholesale orders ({n}+ bottles).",
     placeOrder: "Place order", placing: "Sending…",
     errorGeneric: "We could not submit your order. Check your details and try again.",
+    errorStale:
+      "We could not submit your order. Check your connection, refresh the page, and try again.",
+    errorUnavailable: "An item in your cart is no longer available. Review your cart and try again.",
+    errorZone: "That governorate is not available right now. Please choose another one.",
     emptyCart: "Your cart is empty — add a product first.",
     agree: "By placing the order you agree to the terms & conditions.",
     secureNote: "We never store card details and nothing is charged automatically.",
@@ -502,7 +518,7 @@ const en: Dictionary = {
   order: {
     success: "Order received", successBody: "We will call you to confirm the delivery time.",
     reference: "Order number", status: "Status",
-    statuses: { pending: "Awaiting confirmation", confirmed: "Confirmed", shipped: "On the way", delivered: "Delivered", cancelled: "Cancelled" },
+    statuses: { pending: "Awaiting confirmation", confirmed: "Confirmed", processing: "Processing", shipped: "On the way", delivered: "Delivered", cancelled: "Cancelled" },
     payment: "Payment", shippingTo: "Delivering to", items: "Items", next: "What next?",
     nextSteps: ["We will contact you to confirm the order.", "Your order is prepared within 1–2 business days.", "Pay on delivery or per your chosen method."],
     whatsapp: "Send order details on WhatsApp",

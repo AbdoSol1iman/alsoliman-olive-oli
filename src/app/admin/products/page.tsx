@@ -1,73 +1,143 @@
+import Image from "next/image";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
-import { products } from "@/lib/products";
-import { flags } from "@/lib/config";
+import { listProductsAdmin, listCategoriesAdmin } from "@/lib/catalog";
 import { formatPrice } from "@/lib/format";
 import { connection } from "next/server";
+import { ProductFlags, ProductRowActions } from "@/components/admin/ProductListActions";
+import { EmptyState, Table, Td, Th } from "@/components/admin/ui";
 
 export const instant = false;
 
 export default async function AdminProductsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const variants = products.flatMap((product) =>
-    product.variants.map((variant) => ({ product, variant })),
-  );
+  const products = listProductsAdmin();
+  const categories = listCategoriesAdmin();
+  const categoryName = (id: string | null) =>
+    id ? (categories.find((c) => c.id === id)?.nameAr ?? "—") : "—";
 
   return (
-    <div>
-      <h1 className="text-[1.7rem]">المنتجات</h1>
-      <p className="mt-1 text-[0.82rem] leading-7 text-ink-muted">
-        الكتالوج الحالي كما يظهر في المتجر. تعديل المحتوى والأسعار يتم من ملف الكتالوج
-        {" "}<code className="rounded-xs bg-cream px-1.5 py-0.5 text-[0.75rem]" dir="ltr">src/lib/products.ts</code>{" "}
-        حتى يتم ربط لوحة إدارة منتجات كاملة.
-      </p>
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-[1.7rem] text-forest">المنتجات</h1>
+          <p className="mt-1 text-[0.82rem] text-ink-muted">
+            {products.length} منتج في الكتالوج. أي تعديل هنا يظهر في المتجر فورًا بدون إعادة نشر.
+          </p>
+        </div>
+        <Link
+          href="/admin/products/new"
+          className="inline-flex h-11 items-center rounded-xs bg-forest px-5 text-[0.82rem] text-ivory transition-colors hover:bg-forest-deep"
+        >
+          + إضافة منتج
+        </Link>
+      </div>
 
-      {flags.sampleCatalog ? (
-        <p className="mt-4 inline-flex items-center gap-2 border border-gold/30 bg-cream/40 px-3 py-2 text-[0.72rem] text-gold">
-          <span aria-hidden className="size-1.5 rounded-full bg-gold" />
-          الأسعار والمخزون الحالية بيانات تجريبية بانتظار تأكيد المالك.
-        </p>
-      ) : null}
-
-      <div className="mt-6 overflow-x-auto border border-gold/20">
-        <table className="w-full min-w-[720px] border-collapse text-[0.82rem]">
-          <thead className="bg-forest text-ivory">
+      {products.length === 0 ? (
+        <EmptyState
+          title="لا توجد منتجات بعد"
+          body="أضف أول منتج ليظهر في المتجر — الاسم، الأسعار، الأحجام والصور."
+        />
+      ) : (
+        <Table>
+          <thead>
             <tr>
-              <th className="px-4 py-2.5 text-start font-medium">المنتج</th>
-              <th className="px-4 py-2.5 text-start font-medium">SKU</th>
-              <th className="px-4 py-2.5 text-start font-medium">الحجم</th>
-              <th className="px-4 py-2.5 text-start font-medium">السعر</th>
-              <th className="px-4 py-2.5 text-start font-medium">المخزون</th>
+              <Th>المنتج</Th>
+              <Th>التصنيف</Th>
+              <Th>الأحجام والأسعار</Th>
+              <Th>المخزون</Th>
+              <Th>الظهور</Th>
+              <Th>الترتيب</Th>
+              <Th>إجراءات</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gold/12 bg-ivory">
-            {variants.map(({ product, variant }) => (
-              <tr key={variant.id}>
-                <td className="px-4 py-3 text-forest">{product.nameAr}</td>
-                <td className="px-4 py-3 text-[0.72rem] text-ink-muted" dir="ltr">{variant.sku}</td>
-                <td className="px-4 py-3 text-ink-muted">{variant.sizeLabelAr}</td>
-                <td className="tnum px-4 py-3 text-forest">{formatPrice(variant.price)}</td>
-                <td className="tnum px-4 py-3">
-                  <span
-                    className={
-                      variant.stock !== null && variant.stock <= 5
-                        ? "rounded-full bg-gold/20 px-2.5 py-1 text-[0.7rem] text-forest"
-                        : "rounded-full bg-sage/20 px-2.5 py-1 text-[0.7rem] text-forest"
-                    }
-                  >
-                    {variant.stock === null ? "غير متتبع" : `${variant.stock} وحدة`}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {products.map((p, index) => {
+              const totalStock = p.variants.reduce(
+                (s, v) => s + (v.stock ?? 0),
+                0,
+              );
+              const tracked = p.variants.some((v) => v.stock !== null);
+              return (
+                <tr key={p.id} className="align-top hover:bg-cream/30">
+                  <Td className="min-w-52">
+                    <div className="flex gap-3">
+                      <span className="relative block size-14 shrink-0 overflow-hidden bg-cream/60">
+                        <Image
+                          src={p.images[0]?.src ?? "/products/bottle-cutout.png"}
+                          alt=""
+                          fill
+                          sizes="56px"
+                          className="object-contain p-1"
+                        />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[0.85rem] text-forest">{p.nameAr}</p>
+                        <p className="text-[0.68rem] text-ink-muted" dir="ltr">
+                          /{p.slug}
+                        </p>
+                        <p className="mt-0.5 text-[0.68rem] text-ink-muted">{p.nameEn}</p>
+                      </div>
+                    </div>
+                  </Td>
+                  <Td>{categoryName(p.categoryId)}</Td>
+                  <Td>
+                    <ul className="space-y-1">
+                      {p.variants.map((v) => (
+                        <li key={v.id} className="flex items-center gap-2 text-[0.74rem]">
+                          <span className="text-ink-muted">{v.sizeLabelAr}</span>
+                          <span className="tnum text-forest">{formatPrice(v.price)}</span>
+                          {v.compareAt ? (
+                            <span className="tnum text-[0.66rem] text-ink-muted line-through">
+                              {formatPrice(v.compareAt)}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </Td>
+                  <Td>
+                    {tracked ? (
+                      <span
+                        className={
+                          totalStock <= p.lowStockThreshold
+                            ? "tnum rounded-full bg-gold/20 px-2.5 py-1 text-[0.7rem] text-forest"
+                            : "tnum rounded-full bg-sage/20 px-2.5 py-1 text-[0.7rem] text-forest"
+                        }
+                      >
+                        {totalStock} وحدة
+                      </span>
+                    ) : (
+                      <span className="text-[0.7rem] text-ink-muted">غير متتبع</span>
+                    )}
+                  </Td>
+                  <Td>
+                    <ProductFlags id={p.id} active={p.active} featured={p.featured} />
+                  </Td>
+                  <Td className="tnum">{p.sortOrder}</Td>
+                  <Td>
+                    <div className="space-y-2">
+                      <Link
+                        href={`/admin/products/${p.id}`}
+                        className="inline-flex h-8 items-center rounded-xs border border-forest/20 px-2.5 text-[0.72rem] text-forest transition-colors hover:border-forest hover:bg-forest hover:text-ivory"
+                      >
+                        تعديل
+                      </Link>
+                      <ProductRowActions
+                        id={p.id}
+                        name={p.nameAr}
+                        canUp={index > 0}
+                        canDown={index < products.length - 1}
+                      />
+                    </div>
+                  </Td>
+                </tr>
+              );
+            })}
           </tbody>
-        </table>
-      </div>
-
-      <p className="mt-4 text-[0.72rem] leading-6 text-ink-muted">
-        ملاحظة: تعديل الأسعار والمخزون يحتاج خطوة لاحقة لنقل الكتالوج إلى قاعدة البيانات.
-        الطلبات تُحفظ فعليًا في قاعدة البيانات الآن.
-      </p>
+        </Table>
+      )}
     </div>
   );
 }

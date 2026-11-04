@@ -20,7 +20,15 @@ const navKeys: Record<string, keyof Dictionary["nav"]> = {
   contact: "contact",
 };
 
-export function Header({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function Header({
+  locale,
+  dict,
+  logoSrc,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  logoSrc?: string;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -78,7 +86,7 @@ export function Header({ locale, dict }: { locale: Locale; dict: Dictionary }) {
             aria-label={locale === "ar" ? "آل سليمان — الرئيسية" : "Alsuliman — home"}
             className="shrink-0"
           >
-            <Logo locale={locale} />
+            <Logo locale={locale} src={logoSrc} />
           </Link>
 
           <nav aria-label={dict.common.menu} className="hidden items-center gap-8 lg:flex">
@@ -233,7 +241,7 @@ export function Header({ locale, dict }: { locale: Locale; dict: Dictionary }) {
           aria-label={dict.common.menu}
         >
           <div className="flex items-center justify-between border-b border-gold/20 px-6 py-5">
-            <Logo locale={locale} />
+            <Logo locale={locale} src={logoSrc} />
             <button
               type="button"
               onClick={() => setMenuOpen(false)}

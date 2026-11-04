@@ -5,7 +5,19 @@ import { ArrowEnd, Drop, Leaf, Truck } from "@/components/ui/Icons";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
-export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+const DEFAULT_HERO_IMAGE = "/products/bottle-cutout.png";
+
+export function Hero({
+  locale,
+  dict,
+  image,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  /** Optional owner-supplied hero image (media library path). */
+  image?: string;
+}) {
+  const heroImage = image || DEFAULT_HERO_IMAGE;
   return (
     <section className="paper relative overflow-hidden">
       {/* ambient botanicals */}
@@ -95,23 +107,40 @@ export function Hero({ locale, dict }: { locale: Locale; dict: Dictionary }) {
             />
 
             <div className="absolute inset-0 flex items-end justify-center pb-[2%]">
-              <Image
-                src="/products/bottle-cutout.png"
-                alt={
-                  locale === "ar"
-                    ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
-                    : "Alsuliman extra virgin olive oil bottle"
-                }
-                width={391}
-                height={1476}
-                priority
-                sizes="(max-width: 1024px) 60vw, 32vw"
-                className="h-[90%] w-auto object-contain drop-shadow-[0_28px_36px_rgba(38,49,31,0.28)]"
-                style={{
-                  maskImage: "linear-gradient(to bottom, #000 93%, transparent 100%)",
-                  WebkitMaskImage: "linear-gradient(to bottom, #000 93%, transparent 100%)",
-                }}
-              />
+              {image ? (
+                <div className="relative h-[90%] w-full">
+                  <Image
+                    src={heroImage}
+                    alt={
+                      locale === "ar"
+                        ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
+                        : "Alsuliman extra virgin olive oil bottle"
+                    }
+                    fill
+                    priority
+                    sizes="(max-width: 1024px) 60vw, 32vw"
+                    className="object-contain object-bottom drop-shadow-[0_28px_36px_rgba(38,49,31,0.28)]"
+                  />
+                </div>
+              ) : (
+                <Image
+                  src={heroImage}
+                  alt={
+                    locale === "ar"
+                      ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
+                      : "Alsuliman extra virgin olive oil bottle"
+                  }
+                  width={391}
+                  height={1476}
+                  priority
+                  sizes="(max-width: 1024px) 60vw, 32vw"
+                  className="h-[90%] w-auto object-contain drop-shadow-[0_28px_36px_rgba(38,49,31,0.28)]"
+                  style={{
+                    maskImage: "linear-gradient(to bottom, #000 93%, transparent 100%)",
+                    WebkitMaskImage: "linear-gradient(to bottom, #000 93%, transparent 100%)",
+                  }}
+                />
+              )}
             </div>
 
             <div className="absolute bottom-[16%] end-[2%] hidden sm:block">

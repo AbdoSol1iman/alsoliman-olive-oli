@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { LegalBody } from "@/components/layout/LegalBody";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { getDictionary } from "@/lib/i18n";
+import { getSiteDictionary } from "@/lib/content";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -25,7 +25,7 @@ export async function generateMetadata({
 export default async function PrivacyPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
-  const dict = getDictionary(locale);
+  const dict = await getSiteDictionary(locale);
 
   return (
     <>

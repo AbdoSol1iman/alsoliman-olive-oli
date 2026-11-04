@@ -6,13 +6,24 @@ import { useEffect } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Close, Trash } from "@/components/ui/Icons";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
-import { useCartLines, useCartStore } from "@/lib/cart-store";
+import { WhatsAppCheckoutButton } from "@/components/store/WhatsAppCheckoutButton";
+import { useCartLines } from "@/lib/catalog-client";
+import { useCartStore } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
-export function CartDrawer({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+export function CartDrawer({
+  locale,
+  dict,
+  whatsappNumber,
+}: {
+  locale: Locale;
+  dict: Dictionary;
+  /** Effective WhatsApp Business number (settings → contact). */
+  whatsappNumber: string;
+}) {
   const open = useCartStore((s) => s.isOpen);
   const close = useCartStore((s) => s.close);
   const items = useCartStore((s) => s.items);
@@ -156,7 +167,20 @@ export function CartDrawer({ locale, dict }: { locale: Locale; dict: Dictionary 
               </div>
               <p className="mt-1 text-[0.7rem] text-ink-muted">{dict.cart.shippingNote}</p>
               <div className="mt-4 flex flex-col gap-2">
-                <ButtonLink href={`/${locale}/checkout`} onClick={close} size="lg" className="w-full">
+                <WhatsAppCheckoutButton
+                  locale={locale}
+                  dict={dict}
+                  whatsappNumber={whatsappNumber}
+                  className="w-full"
+                  tabIndex={open ? 0 : -1}
+                />
+                <ButtonLink
+                  href={`/${locale}/checkout`}
+                  variant="outline"
+                  onClick={close}
+                  size="lg"
+                  className="w-full"
+                >
                   {dict.cart.checkout}
                 </ButtonLink>
                 <Button variant="ghost" size="sm" onClick={close} className="w-full" tabIndex={open ? 0 : -1}>

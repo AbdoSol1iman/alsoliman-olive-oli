@@ -5,7 +5,6 @@ import { useState, useTransition } from "react";
 import { Search } from "@/components/ui/Icons";
 import { cx } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
-import { sizeFilters } from "@/lib/products";
 import type { Locale } from "@/lib/products";
 
 const sizeName = (ml: number, locale: Locale) =>
@@ -15,10 +14,13 @@ export function ShopFilters({
   locale,
   dict,
   resultCount,
+  sizes,
 }: {
   locale: Locale;
   dict: Dictionary;
   resultCount: number;
+  /** Distinct variant sizes in the catalog (from the server). */
+  sizes: number[];
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -98,7 +100,7 @@ export function ShopFilters({
           >
             {dict.shop.allSizes}
           </button>
-          {sizeFilters.map((ml) => (
+          {sizes.map((ml) => (
             <button
               key={ml}
               type="button"
