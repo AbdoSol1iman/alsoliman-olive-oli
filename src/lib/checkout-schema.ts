@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+/** Upper bounds so a scripted request cannot post an enormous cart. */
+export const MAX_ORDER_LINES = 20;
+export const MAX_ORDER_QTY = 60;
+
 /**
  * Governorate is validated against the *settings* zones inside `createOrder`
  * (the zone list is owner-editable), so here we only require a sane string.
@@ -18,16 +22,25 @@ export const checkoutSchema = z.object({
   payment: z.enum(["cod", "instapay"]).default("cod"),
   locale: z.enum(["ar", "en"]).default("ar"),
   idempotencyKey: z.string().trim().min(8).max(64),
+  /**
+   * Honeypot. Humans never see or fill it; `createOrder` refuses any non-empty
+   * value even if a future caller bypasses the HTTP route.
+   */
+  website: z.string().trim().max(200).optional().default(""),
   items: z
     .array(
       z.object({
-        productId: z.string(),
-        variantId: z.string(),
+        productId: z.string().min(1).max(120),
+        variantId: z.string().min(1).max(120),
         qty: z.number().int().min(1).max(50),
       }),
     )
-    .min(1),
-});
+    .min(1)
+    .max(MAX_ORDER_LINES)
+    .refine((items) => items.reduce((sum, item) => sum + item.qty, 0) <= MAX_ORDER_QTY, {
+      message: "invalid_quantity",
+    }),
+}).refine((value) => value.website === "", { message: "invalid_input", path: ["website"] });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
 

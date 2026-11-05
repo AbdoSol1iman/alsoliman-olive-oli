@@ -144,6 +144,13 @@ const SCHEMA = `
     updated_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS checkout_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ip TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_checkout_attempts_ip ON checkout_attempts(ip, created_at);
+
   CREATE TABLE IF NOT EXISTS admin_users (
     id TEXT PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,

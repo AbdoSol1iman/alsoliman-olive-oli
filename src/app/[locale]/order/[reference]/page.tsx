@@ -7,7 +7,7 @@ import { Check, Whatsapp } from "@/components/ui/Icons";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
 import { formatDate, formatPrice } from "@/lib/format";
-import { getOrderByReference } from "@/lib/orders";
+import { buildOrderWhatsappHref, getOrderByReference } from "@/lib/orders";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -21,15 +21,16 @@ export const metadata: Metadata = {
 
 export default async function OrderPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; reference: string }>;
+  searchParams: Promise<{ wa?: string }>;
 }) {
   await connection();
-  const { locale: raw, reference } = await params;
+  const [{ locale: raw, reference }, query] = await Promise.all([params, searchParams]);
   if (!isLocale(raw)) notFound();
   const locale = raw;
   const [dict, settings] = await Promise.all([getSiteDictionary(locale), getSettings()]);
-  const contact = settings.contact;
   const result = await getOrderByReference(reference);
 
   if (!result) {
@@ -49,16 +50,11 @@ export default async function OrderPage({
   const zone = order.governorate;
   const govLabel = isAr ? settings.shipping.zones[zone]?.ar : settings.shipping.zones[zone]?.en;
 
-  const waMessage = [
-    isAr ? "مرحبًا آل سليمان،" : "Hello Alsuliman,",
-    isAr ? `بخصوص الطلب رقم ${order.reference}` : `About order ${order.reference}`,
-    ...items.map((i) => `• ${isAr ? i.name_ar : i.name_en} — ${isAr ? i.size_ar : i.size_en} × ${i.qty}`),
-    isAr ? `الإجمالي: ${formatPrice(order.total, locale)}` : `Total: ${formatPrice(order.total, locale)}`,
-  ].join("\n");
-
-  const waHref = contact.whatsappNumber
-    ? `https://wa.me/${contact.whatsappNumber}?text=${encodeURIComponent(waMessage)}`
-    : null;
+  // Rebuilt from the stored order on every render: the link is complete
+  // (name, phone, address, items, totals, reference) and survives a reload.
+  const waHref = buildOrderWhatsappHref(order, items, settings, locale);
+  const waState =
+    !waHref ? "unavailable" : query.wa === "blocked" ? "blocked" : "ready";
 
   return (
     <div className="paper min-h-[70vh]">
@@ -71,13 +67,56 @@ export default async function OrderPage({
             <h1 className="mt-6 text-[clamp(1.8rem,4vw,2.6rem)]">{dict.order.success}</h1>
             <p className="mt-3 text-[0.9rem] leading-8 text-ink-muted">{dict.order.successBody}</p>
             <p className="mt-6 inline-flex items-center gap-2 border border-gold/30 bg-ivory px-4 py-2">
-              <span className="text-[0.68rem] tracking-[0.16em] text-ink-muted">{dict.order.reference}</span>
-              <span className="tnum text-[0.9rem] font-medium text-forest" dir="ltr">{order.reference}</span>
+              <span className="text-[0.68rem] tracking-[0.16em] text-ink-muted">{dict.order.reference}:</span>
+              <span className="tnum text-[0.9rem] font-medium text-forest" dir="ltr">#{order.reference}</span>
             </p>
             <p className="mt-2 text-[0.7rem] text-ink-muted">{formatDate(order.created_at, locale)}</p>
           </div>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-3">
+          {/* WhatsApp hand-off: the only step that actually confirms the order. */}
+          <div
+            data-testid="order-whatsapp-panel"
+            className="mt-8 border border-gold/30 bg-cream/30 p-6 text-center md:p-8"
+          >
+            <p className="text-[0.62rem] tracking-[0.18em] text-gold">{dict.order.next}</p>
+            <h2 className="mt-2 text-[1.15rem] text-forest">{dict.order.notConfirmedYet}</h2>
+            <p className="mx-auto mt-3 max-w-xl text-[0.85rem] leading-8 text-charcoal">
+              {dict.order.instruction}
+            </p>
+
+            {waState === "blocked" ? (
+              <p className="mx-auto mt-4 max-w-xl border border-gold/30 bg-ivory px-4 py-3 text-[0.8rem] leading-7 text-forest">
+                {dict.order.whatsappBlocked}
+              </p>
+            ) : null}
+
+            {waHref ? (
+              <>
+                <a
+                  href={waHref}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  data-testid="order-whatsapp"
+                  className="mt-5 inline-flex h-[3.4rem] w-full items-center justify-center gap-2.5 rounded-xs bg-forest px-8 text-[0.95rem] font-medium tracking-wide text-ivory transition-colors hover:bg-forest-deep sm:w-auto"
+                >
+                  <Whatsapp size={19} />
+                  {dict.order.whatsappConfirm}
+                </a>
+                <p className="mt-4 text-[0.7rem] leading-6 text-ink-muted">{dict.order.whatsappNote}</p>
+              </>
+            ) : (
+              <>
+                <p className="mx-auto mt-4 max-w-xl border border-gold/30 bg-ivory px-4 py-3 text-[0.8rem] leading-7 text-forest">
+                  {dict.order.whatsappUnavailable}
+                </p>
+                <ButtonLink href={`/${locale}/contact`} variant="outline" size="md" className="mt-4">
+                  {dict.footer.links.contact}
+                </ButtonLink>
+              </>
+            )}
+          </div>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {[
               { label: dict.order.status, value: dict.order.statuses[order.status] },
               {
@@ -151,17 +190,6 @@ export default async function OrderPage({
           </div>
 
           <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            {waHref ? (
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="inline-flex h-12 items-center justify-center gap-2.5 rounded-xs bg-forest px-7 text-[0.9rem] text-ivory transition-colors hover:bg-forest-deep"
-              >
-                <Whatsapp size={18} />
-                {dict.order.whatsapp}
-              </a>
-            ) : null}
             <ButtonLink href={`/${locale}/shop`} variant="outline" size="md">
               {dict.cart.continue}
             </ButtonLink>

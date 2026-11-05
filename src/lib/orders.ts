@@ -1,8 +1,8 @@
 import "server-only";
-import { updateTag } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { getDb } from "./db";
 import { readCatalogData, CATALOG_TAG } from "./catalog";
-import { readSettingsFresh, shippingFeeFor, isWholesale } from "./settings";
+import { readSettingsFresh, shippingFeeFor, isWholesale, type Settings } from "./settings";
 import { checkoutSchema } from "./checkout-schema";
 import { buildConfirmedOrderMessage, whatsappOrderHref } from "./whatsapp";
 import type { Locale } from "./products";
@@ -97,7 +97,17 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     return { ok: false, code: "invalid_zone" };
   }
 
-  const lines = input.items.flatMap((item) => {
+  // Merge duplicate lines for the same variant so the stock check cannot be
+  // bypassed by splitting one quantity across repeated cart lines.
+  const requested = new Map<string, { productId: string; variantId: string; qty: number }>();
+  for (const item of input.items) {
+    const key = `${item.productId}:${item.variantId}`;
+    const current = requested.get(key);
+    if (current) current.qty += item.qty;
+    else requested.set(key, { productId: item.productId, variantId: item.variantId, qty: item.qty });
+  }
+
+  const lines = [...requested.values()].flatMap((item) => {
     const product = products.find((p) => p.id === item.productId && p.active);
     const variant = product?.variants.find((v) => v.id === item.variantId);
     if (!product || !variant) return [];
@@ -114,7 +124,7 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     }];
   });
 
-  if (lines.length !== input.items.length) {
+  if (lines.length !== requested.size) {
     console.log("[order] unavailable", JSON.stringify(input.items), lines.length);
     return { ok: false, code: "unavailable" };
   }
@@ -128,25 +138,23 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
   });
   const total = subtotal + fee;
 
-  const existing = await db
-    .prepare("SELECT reference FROM orders WHERE idempotency_key = ?")
-    .get<{ reference: string }>(input.idempotencyKey);
-  if (existing) {
-    return {
-      ok: true,
-      reference: existing.reference,
-      whatsappHref: await confirmedOrderHref(existing.reference, input.locale),
-    };
-  }
-
   const id = randomUUID();
   const reference = makeReference();
   const now = new Date().toISOString();
 
-  await db.transaction(async (tx) => {
-    await tx
+  const outcome = await db.transaction(async (tx) => {
+    // Idempotency: a retry / double submit with the same key returns the order
+    // that already exists instead of creating a second one.
+    const existing = await tx
+      .prepare("SELECT reference FROM orders WHERE idempotency_key = ?")
+      .get<{ reference: string }>(input.idempotencyKey);
+    if (existing) return { reference: existing.reference, created: false };
+
+    // `OR IGNORE` keeps the UNIQUE idempotency key safe when two concurrent
+    // requests both pass the check above: exactly one INSERT wins.
+    const inserted = await tx
       .prepare(
-        `INSERT INTO orders (id, reference, created_at, status, customer_name, phone, governorate, city, address, notes, payment_method, subtotal, shipping, total, idempotency_key, updated_at)
+        `INSERT OR IGNORE INTO orders (id, reference, created_at, status, customer_name, phone, governorate, city, address, notes, payment_method, subtotal, shipping, total, idempotency_key, updated_at)
          VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
@@ -167,6 +175,13 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
         now,
       );
 
+    if (inserted.changes === 0) {
+      const raced = await tx
+        .prepare("SELECT reference FROM orders WHERE idempotency_key = ?")
+        .get<{ reference: string }>(input.idempotencyKey);
+      return { reference: raced?.reference ?? null, created: false };
+    }
+
     const itemStmt = tx.prepare(
       `INSERT INTO order_items (order_id, product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, qty)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -174,17 +189,70 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     for (const l of lines) {
       await itemStmt.run(id, l.productId, l.variantId, l.nameAr, l.nameEn, l.sizeAr, l.sizeEn, l.unitPrice, l.qty);
     }
+
+    return { reference, created: true };
   });
 
-  // A sale changes stock and best-seller data — refresh the storefront cache.
-  // (createOrder only ever runs inside a server action, where updateTag is valid.)
-  updateTag(CATALOG_TAG);
+  if (!outcome.reference) {
+    // A UNIQUE reference collision (not an idempotent replay). Asking the
+    // customer to retry cannot duplicate anything: the retry reuses the key.
+    return { ok: false, code: "server_error" };
+  }
+
+  if (outcome.created) {
+    // A sale changes stock and best-seller data — refresh the storefront cache.
+    // `revalidateTag` (not `updateTag`) because this now runs in a Route
+    // Handler, where `updateTag` is not allowed.
+    revalidateTag(CATALOG_TAG, "max");
+  }
 
   return {
     ok: true,
-    reference,
-    whatsappHref: await confirmedOrderHref(reference, input.locale),
+    reference: outcome.reference,
+    whatsappHref: await confirmedOrderHref(outcome.reference, input.locale),
   };
+}
+
+/**
+ * Build the `wa.me` deep link for a stored order. Exported so the confirmation
+ * page renders exactly the same complete message as the checkout hand-off
+ * (name, phone, address, items, totals and reference) after a reload too.
+ */
+export function buildOrderWhatsappHref(
+  order: OrderRecord,
+  items: OrderItem[],
+  settings: Settings,
+  locale: Locale,
+): string | null {
+  const number = settings.contact.whatsappNumber;
+  if (!number) return null;
+
+  const zone = settings.shipping.zones[order.governorate];
+  const message = buildConfirmedOrderMessage(
+    {
+      reference: order.reference,
+      customerName: order.customer_name,
+      phone: order.phone,
+      governorate: (locale === "ar" ? zone?.ar : zone?.en) || order.governorate,
+      city: order.city,
+      address: order.address,
+      notes: order.notes,
+      payment: order.payment_method,
+      items: items.map((item) => ({
+        name: locale === "ar" ? item.name_ar : item.name_en,
+        size: locale === "ar" ? item.size_ar : item.size_en,
+        qty: item.qty,
+        unitPrice: item.unit_price,
+        lineTotal: item.unit_price * item.qty,
+      })),
+      subtotal: order.subtotal,
+      shipping: order.shipping,
+      total: order.total,
+    },
+    locale,
+  );
+
+  return whatsappOrderHref(number, message);
 }
 
 /**
@@ -194,38 +262,9 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
  */
 async function confirmedOrderHref(reference: string, locale: Locale): Promise<string | null> {
   const settings = await readSettingsFresh();
-  const number = settings.contact.whatsappNumber;
-  if (!number) return null;
-
   const found = await getOrderByReference(reference);
   if (!found) return null;
-
-  const zone = settings.shipping.zones[found.order.governorate];
-  const message = buildConfirmedOrderMessage(
-    {
-      reference: found.order.reference,
-      customerName: found.order.customer_name,
-      phone: found.order.phone,
-      governorate: (locale === "ar" ? zone?.ar : zone?.en) || found.order.governorate,
-      city: found.order.city,
-      address: found.order.address,
-      notes: found.order.notes,
-      payment: found.order.payment_method,
-      items: found.items.map((item) => ({
-        name: locale === "ar" ? item.name_ar : item.name_en,
-        size: locale === "ar" ? item.size_ar : item.size_en,
-        qty: item.qty,
-        unitPrice: item.unit_price,
-        lineTotal: item.unit_price * item.qty,
-      })),
-      subtotal: found.order.subtotal,
-      shipping: found.order.shipping,
-      total: found.order.total,
-    },
-    locale,
-  );
-
-  return whatsappOrderHref(number, message);
+  return buildOrderWhatsappHref(found.order, found.items, settings, locale);
 }
 
 export async function getOrderByReference(reference: string) {

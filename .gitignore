@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local sqlite database (orders)
 /data/
+
+# verified database backups (never commit)
+/backups/

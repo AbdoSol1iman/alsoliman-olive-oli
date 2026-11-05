@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Chevron, Check, Shield } from "@/components/ui/Icons";
-import { submitOrder } from "@/app/actions/orders";
 import { useCartLines } from "@/lib/catalog-client";
 import { useCartStore } from "@/lib/cart-store";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -21,6 +20,15 @@ import type { Dictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 type Errors = Record<string, string>;
+
+type CheckoutResponse = {
+  ok?: boolean;
+  reference?: string;
+  whatsappHref?: string | null;
+  code?: string;
+  retryAfterSeconds?: number;
+  message?: string;
+};
 
 export function CheckoutForm({
   locale,
@@ -38,6 +46,8 @@ export function CheckoutForm({
   const clear = useCartStore((s) => s.clear);
   const router = useRouter();
   const keyRef = useRef<string>("");
+  /** Synchronous guard: `submitting` state only updates after a re-render. */
+  const inFlightRef = useRef(false);
   const mounted = useHydrated();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
@@ -50,6 +60,8 @@ export function CheckoutForm({
     address: "",
     notes: "",
     payment: "cod" as "cod" | "instapay",
+    /** Honeypot — always empty for humans. */
+    website: "",
   });
 
   /** Stable idempotency key per checkout attempt — created lazily on first
@@ -91,7 +103,7 @@ export function CheckoutForm({
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitting) return;
+    if (inFlightRef.current) return;
     setFormError("");
 
     const parsed = checkoutSchema.safeParse({
@@ -112,16 +124,19 @@ export function CheckoutForm({
           : field === "governorate" ? dict.checkout.validation.governorate
           : field === "city" ? dict.checkout.validation.city
           : field === "address" ? dict.checkout.validation.address
+          : field === "items" ? dict.checkout.errorUnavailable
           : msg;
       }
       setErrors(localized);
       return;
     }
 
+    inFlightRef.current = true;
     setSubmitting(true);
-    // WhatsApp is part of placing the order, not an optional extra. Open the
-    // tab now, while the click still counts as a user gesture — browsers block
-    // `window.open` once the server action has resolved.
+    // WhatsApp is part of placing the order. Open the tab now, while the click
+    // still counts as a user gesture — browsers may block `window.open` once
+    // the fetch has resolved. If it is blocked we stay on-site and let the
+    // confirmation page offer a manual button.
     let waWindow: Window | null = null;
     try {
       waWindow = window.open("about:blank", "_blank");
@@ -131,48 +146,68 @@ export function CheckoutForm({
     const closeWaWindow = () => {
       if (waWindow && !waWindow.closed) waWindow.close();
     };
+    const fail = (message: string) => {
+      closeWaWindow();
+      setFormError(message);
+      setSubmitting(false);
+      inFlightRef.current = false;
+    };
+
     try {
-      const result = await submitOrder(parsed.data);
-      if (!result.ok) {
-        // The key is kept so a retry of the same attempt can never double-charge.
-        // Surface the real reason instead of one generic message: the customer
-        // can act on "item gone" / "governorate changed", but not on a blank slate.
-        closeWaWindow();
-        setFormError(
-          result.code === "unavailable"
+      const response = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed.data),
+      });
+      const result = (await response.json().catch(() => null)) as CheckoutResponse | null;
+
+      // Rate limited: a real 429 from the shared persistent limiter.
+      if (response.status === 429) {
+        const seconds = result?.retryAfterSeconds ?? 0;
+        const minutes = Math.max(1, Math.ceil(seconds / 60));
+        fail(dict.checkout.errorRateLimited.replace("{n}", String(minutes)));
+        return;
+      }
+
+      if (!response.ok || !result?.ok || !result.reference) {
+        // The key is kept so a retry of the same attempt can never create a
+        // second order. Surface the reason the customer can actually act on.
+        fail(
+          result?.code === "unavailable"
             ? dict.checkout.errorUnavailable
-            : result.code === "invalid_zone"
+            : result?.code === "invalid_zone"
               ? dict.checkout.errorZone
               : dict.checkout.errorGeneric,
         );
-        setSubmitting(false);
         return;
       }
+
       // The order is stored: retire the key so the next order (e.g. after the
       // customer returns to the shop) gets its own reference.
       keyRef.current = "";
       clear();
 
-      if (result.whatsappHref) {
-        if (waWindow && !waWindow.closed) {
-          waWindow.location.href = result.whatsappHref;
-        } else {
-          // Popup blocked — send the customer straight to WhatsApp in this tab.
-          // The message carries the reference, so the confirmation page is not
-          // the only record of the order.
-          window.location.href = result.whatsappHref;
-          return;
-        }
+      const waState = !result.whatsappHref
+        ? "unavailable"
+        : waWindow && !waWindow.closed
+          ? "ready"
+          : "blocked";
+
+      if (waState === "ready" && result.whatsappHref) {
+        waWindow!.location.href = result.whatsappHref;
       } else {
         closeWaWindow();
       }
-      router.push(`/${locale}/order/${result.reference}`);
+
+      // Always show the confirmation page. The customer finds the same full
+      // WhatsApp button there (works after reload and on mobile/desktop).
+      router.replace(
+        `/${locale}/order/${encodeURIComponent(result.reference)}?wa=${waState}`,
+      );
     } catch {
-      // The action never produced a result: offline, or the page predates the
-      // last deploy (server-action ids change per build → HTTP 400).
-      closeWaWindow();
-      setFormError(dict.checkout.errorStale);
-      setSubmitting(false);
+      // The request never produced a result: offline, or the page predates the
+      // last deploy.
+      fail(dict.checkout.errorStale);
     }
   };
 
@@ -203,6 +238,24 @@ export function CheckoutForm({
 
       <form onSubmit={onSubmit} noValidate className="grid gap-10 lg:grid-cols-[1.5fr_1fr] lg:gap-16">
         <div className="space-y-8">
+          {/* Honeypot: off-screen, not focusable and hidden from assistive
+              tech. Only bots filling every field will touch it. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -left-[9999px] top-auto h-px w-px overflow-hidden"
+          >
+            <label htmlFor="website">Website</label>
+            <input
+              id="website"
+              name="website"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={form.website}
+              onChange={(e) => set("website", e.target.value)}
+            />
+          </div>
+
           <fieldset className="border border-gold/20 bg-ivory p-6 md:p-8">
             <legend className="px-2 text-[0.75rem] tracking-[0.18em] text-gold">
               {dict.checkout.contact}
@@ -455,12 +508,28 @@ export function CheckoutForm({
           </div>
 
           {formError ? (
-            <p role="alert" className="mt-4 border border-red-800/30 bg-red-50/50 p-3 text-[0.75rem] text-red-900">
-              {formError}
-            </p>
+            <div
+              role="alert"
+              data-testid="checkout-error"
+              className="mt-4 border border-red-800/30 bg-red-50/50 p-4"
+            >
+              <p className="text-[0.82rem] font-medium text-red-900">
+                {dict.checkout.errorTitle}
+              </p>
+              <p className="mt-1 text-[0.75rem] leading-6 text-red-900">{formError}</p>
+              <p className="mt-2 text-[0.7rem] leading-5 text-red-900/80">
+                {dict.checkout.errorRetry}
+              </p>
+            </div>
           ) : null}
 
-          <Button type="submit" size="lg" className="mt-5 w-full" disabled={submitting}>
+          <Button
+            type="submit"
+            size="lg"
+            className="mt-5 w-full"
+            disabled={submitting}
+            aria-busy={submitting}
+          >
             {submitting ? dict.checkout.placing : dict.checkout.placeOrder}
             {!submitting ? <Check size={16} /> : null}
           </Button>

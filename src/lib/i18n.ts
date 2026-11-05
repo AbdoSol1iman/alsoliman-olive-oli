@@ -225,6 +225,10 @@ const ar = {
     errorUnavailable: "أحد المنتجات في سلتك لم تعد متاحة. راجع السلة وحاول مرة أخرى.",
     /** Governorate no longer exists in the owner-editable zone list. */
     errorZone: "المحافظة المختارة غير متاحة حاليًا. اختر محافظة أخرى.",
+    errorTitle: "لم نتمكن من تسجيل طلبك",
+    errorRateLimited:
+      "لقد وصلت إلى الحد الأقصى من المحاولات. يرجى الانتظار {n} دقيقة ثم المحاولة مرة أخرى.",
+    errorRetry: "بياناتك محفوظة. يمكنك تعديلها والمحاولة مرة أخرى دون إنشاء طلب مكرر.",
     emptyCart: "سلتك فارغة، أضف منتجًا أولًا.",
     agree: "بتأكيد الطلب أنت توافق على الشروط والأحكام.",
     secureNote: "لا نحتفظ ببيانات بطاقات الدفع، ولا يتم أي خصم تلقائي.",
@@ -237,8 +241,16 @@ const ar = {
     },
   },
   order: {
-    success: "تم استلام طلبك",
-    successBody: "سنتواصل معك على رقم الموبايل لتأكيد الموعد.",
+    success: "تم تسجيل طلبك بنجاح",
+    successBody: "احتفظنا بتفاصيل طلبك، ويبقى التأكيد النهائي عبر واتساب.",
+    instruction:
+      "الخطوة الأخيرة: اضغط على الزر بالأسفل لفتح واتساب وإرسال تفاصيل طلبك لتأكيد الطلب.",
+    whatsappConfirm: "تأكيد الطلب عبر واتساب",
+    whatsappNote:
+      "لا يتم إرسال الرسالة تلقائيًا. بعد فتح واتساب اضغط زر الإرسال لإتمام التأكيد.",
+    whatsappBlocked: "لم نتمكن من فتح واتساب تلقائيًا. اضغط الزر بالأسفل للمتابعة.",
+    whatsappUnavailable: "واتساب غير متاح حاليًا. سنتواصل معك هاتفيًا لتأكيد الطلب.",
+    notConfirmedYet: "الطلب مسجّل بانتظار تأكيدك عبر واتساب.",
     reference: "رقم الطلب",
     status: "الحالة",
     statuses: {
@@ -254,6 +266,7 @@ const ar = {
     items: "المنتجات",
     next: "ما التالي؟",
     nextSteps: [
+      "أرسل تفاصيل الطلب عبر واتساب من الزر بالأعلى.",
       "سنتواصل معك لتأكيد الطلب.",
       "يتم تجهيز الطلب خلال ١–٢ يوم عمل.",
       "الدفع عند الاستلام أو حسب الطريقة المختارة.",
@@ -506,6 +519,10 @@ const en: Dictionary = {
       "We could not submit your order. Check your connection, refresh the page, and try again.",
     errorUnavailable: "An item in your cart is no longer available. Review your cart and try again.",
     errorZone: "That governorate is not available right now. Please choose another one.",
+    errorTitle: "We could not place your order",
+    errorRateLimited:
+      "You have reached the maximum number of attempts. Please wait {n} minute(s) and try again.",
+    errorRetry: "Your details are saved. You can edit them and try again without creating a duplicate order.",
     emptyCart: "Your cart is empty — add a product first.",
     agree: "By placing the order you agree to the terms & conditions.",
     secureNote: "We never store card details and nothing is charged automatically.",
@@ -516,11 +533,20 @@ const en: Dictionary = {
     },
   },
   order: {
-    success: "Order received", successBody: "We will call you to confirm the delivery time.",
+    success: "Your order was placed successfully",
+    successBody: "We saved your order details; final confirmation happens on WhatsApp.",
+    instruction:
+      "Last step: tap the button below to open WhatsApp and send your order details to confirm.",
+    whatsappConfirm: "Confirm the order on WhatsApp",
+    whatsappNote:
+      "The message is not sent automatically. After WhatsApp opens, tap Send to complete the confirmation.",
+    whatsappBlocked: "We could not open WhatsApp automatically. Tap the button below to continue.",
+    whatsappUnavailable: "WhatsApp is unavailable right now. We will call you to confirm the order.",
+    notConfirmedYet: "Your order is saved and awaiting your WhatsApp confirmation.",
     reference: "Order number", status: "Status",
     statuses: { pending: "Awaiting confirmation", confirmed: "Confirmed", processing: "Processing", shipped: "On the way", delivered: "Delivered", cancelled: "Cancelled" },
     payment: "Payment", shippingTo: "Delivering to", items: "Items", next: "What next?",
-    nextSteps: ["We will contact you to confirm the order.", "Your order is prepared within 1–2 business days.", "Pay on delivery or per your chosen method."],
+    nextSteps: ["Send your order details on WhatsApp using the button above.", "We will contact you to confirm the order.", "Your order is prepared within 1–2 business days.", "Pay on delivery or per your chosen method."],
     whatsapp: "Send order details on WhatsApp",
     notFound: "Order not found", notFoundBody: "Check the order number or contact us.",
     backHome: "Back home", savedNote: "Your order was saved in the store database.",
