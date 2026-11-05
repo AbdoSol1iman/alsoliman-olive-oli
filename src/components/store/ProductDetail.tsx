@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
 import { Check, Drop, Leaf, Truck } from "@/components/ui/Icons";
@@ -34,8 +35,22 @@ export function ProductDetail({
   const name = locale === "ar" ? product.nameAr : product.nameEn;
   const images = product.images;
 
+  useEffect(() => {
+    trackEvent("ViewContent", {
+      productId: product.id,
+      variantId: variant.id,
+      value: variant.price,
+    });
+  }, [product.id, variant.id, variant.price]);
+
   const onAdd = () => {
     add(product.id, variant.id, qty);
+    trackEvent("AddToCart", {
+      productId: product.id,
+      variantId: variant.id,
+      value: variant.price * qty,
+      metadata: { qty },
+    });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2000);
   };

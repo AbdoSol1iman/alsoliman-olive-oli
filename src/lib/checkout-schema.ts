@@ -4,6 +4,26 @@ import { z } from "zod";
 export const MAX_ORDER_LINES = 20;
 export const MAX_ORDER_QTY = 60;
 
+/** One captured touch — UTM values, external referrer and landing page. */
+export const attributionTouchSchema = z.object({
+  utmSource: z.string().trim().max(160).default(""),
+  utmMedium: z.string().trim().max(160).default(""),
+  utmCampaign: z.string().trim().max(160).default(""),
+  utmContent: z.string().trim().max(160).default(""),
+  utmTerm: z.string().trim().max(160).default(""),
+  referrer: z.string().trim().max(500).default(""),
+  landingPage: z.string().trim().max(500).default(""),
+});
+
+export const attributionSchema = z.object({
+  visitorId: z.string().trim().min(8).max(80),
+  sessionId: z.string().trim().min(8).max(80),
+  first: attributionTouchSchema,
+  last: attributionTouchSchema,
+});
+
+export type AttributionInput = z.infer<typeof attributionSchema>;
+
 /**
  * Governorate is validated against the *settings* zones inside `createOrder`
  * (the zone list is owner-editable), so here we only require a sane string.
@@ -22,6 +42,8 @@ export const checkoutSchema = z.object({
   payment: z.enum(["cod", "instapay"]).default("cod"),
   locale: z.enum(["ar", "en"]).default("ar"),
   idempotencyKey: z.string().trim().min(8).max(64),
+  /** First-touch + last-touch marketing attribution captured by the browser. */
+  attribution: attributionSchema.optional(),
   /**
    * Honeypot. Humans never see or fill it; `createOrder` refuses any non-empty
    * value even if a future caller bypasses the HTTP route.

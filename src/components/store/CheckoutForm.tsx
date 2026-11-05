@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getAttribution, trackEvent } from "@/lib/analytics";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Chevron, Check, Shield } from "@/components/ui/Icons";
 import { useCartLines } from "@/lib/catalog-client";
@@ -25,6 +26,7 @@ type CheckoutResponse = {
   ok?: boolean;
   reference?: string;
   whatsappHref?: string | null;
+  total?: number;
   code?: string;
   retryAfterSeconds?: number;
   message?: string;
@@ -52,6 +54,7 @@ export function CheckoutForm({
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [formError, setFormError] = useState("");
+  const checkoutTrackedRef = useRef(false);
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
@@ -90,6 +93,15 @@ export function CheckoutForm({
     zoneFee === 0 && isWholesaleFor(config, totalQty) ? ("wholesale" as const) : null;
   const total = subtotal + shippingFee;
 
+  useEffect(() => {
+    if (!mounted || lines.length === 0 || checkoutTrackedRef.current) return;
+    checkoutTrackedRef.current = true;
+    trackEvent("InitiateCheckout", {
+      value: total,
+      metadata: { items: lines.reduce((sum, l) => sum + l.qty, 0) },
+    });
+  }, [mounted, lines, total]);
+
   const set = (field: keyof typeof form, value: string) => {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => {
@@ -111,6 +123,7 @@ export function CheckoutForm({
       notes: form.notes,
       locale,
       idempotencyKey: idempotencyKey(),
+      attribution: getAttribution() ?? undefined,
       items: lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })),
     });
 
@@ -197,6 +210,21 @@ export function CheckoutForm({
         waWindow!.location.href = result.whatsappHref;
       } else {
         closeWaWindow();
+      }
+
+      // Purchase = the server accepted and stored the order, never earlier.
+      // The reference is the deduplication id shared with the server event.
+      trackEvent("Purchase", {
+        orderReference: result.reference,
+        value: result.total ?? total,
+        eventId: `purchase:${result.reference}`,
+      });
+      if (waState === "ready") {
+        trackEvent("WhatsAppOpened", {
+          orderReference: result.reference,
+          eventId: `wa:${result.reference}`,
+          metadata: { channel: "checkout_auto" },
+        });
       }
 
       // Always show the confirmation page. The customer finds the same full

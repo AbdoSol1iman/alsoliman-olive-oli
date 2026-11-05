@@ -2,7 +2,12 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { setOrderStatusAction, addOrderNoteAction, deleteOrderNoteAction } from "@/app/actions/orders-admin";
+import {
+  addOrderNoteAction,
+  deleteOrderAction,
+  deleteOrderNoteAction,
+  setOrderStatusAction,
+} from "@/app/actions/orders-admin";
 import type { OrderStatus } from "@/lib/orders";
 import { humanError, MiniButton, STATUS_LABELS, STATUS_ORDER } from "./ui";
 
@@ -51,6 +56,72 @@ export function OrderStatusForm({ reference, status }: { reference: string; stat
       {error ? <p className="text-[0.72rem] text-red-800">{error}</p> : null}
       {done ? <p className="text-[0.72rem] text-forest">تم تحديث الحالة ✓</p> : null}
     </form>
+  );
+}
+
+export function OrderDeleteButton({
+  reference,
+  compact = false,
+  redirectTo,
+}: {
+  reference: string;
+  /** Row-sized button for the orders table. */
+  compact?: boolean;
+  /** Navigate here after a successful delete (e.g. the detail page). */
+  redirectTo?: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState("");
+
+  const remove = () => {
+    if (
+      !window.confirm(
+        `حذف الطلب «${reference}» نهائيًا؟ سيتم حذف أصنافه وملاحظاته وسجل حالته، ولا يمكن التراجع.`,
+      )
+    ) {
+      return;
+    }
+    setError("");
+    startTransition(async () => {
+      const result = await deleteOrderAction(reference);
+      if (!result.ok) {
+        setError(humanError(result.error));
+        return;
+      }
+      if (redirectTo) router.push(redirectTo);
+      router.refresh();
+    });
+  };
+
+  if (compact) {
+    return (
+      <>
+        <MiniButton
+          onClick={remove}
+          disabled={pending}
+          className="border-red-900/30 text-red-900 hover:bg-red-900 hover:text-ivory"
+          aria-label={`حذف الطلب ${reference}`}
+        >
+          {pending ? "…" : "حذف"}
+        </MiniButton>
+        {error ? <p className="mt-1 text-[0.68rem] text-red-800">{error}</p> : null}
+      </>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={remove}
+        disabled={pending}
+        className="inline-flex h-10 items-center rounded-xs border border-red-900/40 px-4 text-[0.78rem] text-red-900 transition-colors hover:bg-red-900 hover:text-ivory disabled:opacity-50"
+      >
+        {pending ? "جارٍ الحذف…" : "حذف الطلب نهائيًا"}
+      </button>
+      {error ? <p className="text-[0.72rem] text-red-800">{error}</p> : null}
+    </div>
   );
 }
 

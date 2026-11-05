@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { ButtonLink } from "@/components/ui/Button";
-import { Check, Whatsapp } from "@/components/ui/Icons";
+import { Check } from "@/components/ui/Icons";
+import { WhatsAppConfirmLink } from "@/components/store/WhatsAppConfirmLink";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
 import { formatDate, formatPrice } from "@/lib/format";
@@ -92,16 +93,11 @@ export default async function OrderPage({
 
             {waHref ? (
               <>
-                <a
+                <WhatsAppConfirmLink
                   href={waHref}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  data-testid="order-whatsapp"
-                  className="mt-5 inline-flex h-[3.4rem] w-full items-center justify-center gap-2.5 rounded-xs bg-forest px-8 text-[0.95rem] font-medium tracking-wide text-ivory transition-colors hover:bg-forest-deep sm:w-auto"
-                >
-                  <Whatsapp size={19} />
-                  {dict.order.whatsappConfirm}
-                </a>
+                  reference={order.reference}
+                  label={dict.order.whatsappConfirm}
+                />
                 <p className="mt-4 text-[0.7rem] leading-6 text-ink-muted">{dict.order.whatsappNote}</p>
               </>
             ) : (

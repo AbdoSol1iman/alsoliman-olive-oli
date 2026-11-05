@@ -7,6 +7,12 @@ import { checkoutSchema } from "./checkout-schema";
 import { buildConfirmedOrderMessage, whatsappOrderHref } from "./whatsapp";
 import type { Locale } from "./products";
 import { randomUUID } from "node:crypto";
+import {
+  attachOrderAttribution,
+  normaliseAttribution,
+  recordOrderStatus,
+  recordServerPurchase,
+} from "./tracking";
 
 export const ORDER_STATUSES = [
   "pending",
@@ -48,6 +54,8 @@ export type OrderItem = {
   size_ar: string;
   size_en: string;
   unit_price: number;
+  /** Cost snapshot at order time — NULL when the owner has not entered a cost. */
+  unit_cost: number | null;
   qty: number;
 };
 
@@ -76,6 +84,8 @@ export type CreateOrderResult =
        * optional extra button. `null` only when no number is configured.
        */
       whatsappHref: string | null;
+      /** Authoritative server total, returned for analytics/Purchase events. */
+      total: number;
     }
   | { ok: false; code: string };
 
@@ -120,6 +130,7 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
       sizeAr: variant.sizeLabelAr,
       sizeEn: variant.sizeLabelEn,
       unitPrice: variant.price,
+      unitCost: variant.cost,
       qty: item.qty,
     }];
   });
@@ -146,9 +157,11 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     // Idempotency: a retry / double submit with the same key returns the order
     // that already exists instead of creating a second one.
     const existing = await tx
-      .prepare("SELECT reference FROM orders WHERE idempotency_key = ?")
-      .get<{ reference: string }>(input.idempotencyKey);
-    if (existing) return { reference: existing.reference, created: false };
+      .prepare("SELECT reference, total FROM orders WHERE idempotency_key = ?")
+      .get<{ reference: string; total: number }>(input.idempotencyKey);
+    if (existing) {
+      return { reference: existing.reference, total: existing.total, created: false };
+    }
 
     // `OR IGNORE` keeps the UNIQUE idempotency key safe when two concurrent
     // requests both pass the check above: exactly one INSERT wins.
@@ -177,20 +190,34 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
 
     if (inserted.changes === 0) {
       const raced = await tx
-        .prepare("SELECT reference FROM orders WHERE idempotency_key = ?")
-        .get<{ reference: string }>(input.idempotencyKey);
-      return { reference: raced?.reference ?? null, created: false };
+        .prepare("SELECT reference, total FROM orders WHERE idempotency_key = ?")
+        .get<{ reference: string; total: number }>(input.idempotencyKey);
+      return { reference: raced?.reference ?? null, total: raced?.total ?? total, created: false };
     }
 
     const itemStmt = tx.prepare(
-      `INSERT INTO order_items (order_id, product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, qty)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO order_items (order_id, product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, unit_cost, qty)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const l of lines) {
-      await itemStmt.run(id, l.productId, l.variantId, l.nameAr, l.nameEn, l.sizeAr, l.sizeEn, l.unitPrice, l.qty);
+      await itemStmt.run(
+        id,
+        l.productId,
+        l.variantId,
+        l.nameAr,
+        l.nameEn,
+        l.sizeAr,
+        l.sizeEn,
+        l.unitPrice,
+        l.unitCost,
+        l.qty,
+      );
     }
 
-    return { reference, created: true };
+    await recordOrderStatus(tx, id, "pending", now, "", "system");
+    await attachOrderAttribution(tx, id, normaliseAttribution(input.attribution), now);
+
+    return { reference, total, created: true };
   });
 
   if (!outcome.reference) {
@@ -204,12 +231,26 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     // `revalidateTag` (not `updateTag`) because this now runs in a Route
     // Handler, where `updateTag` is not allowed.
     revalidateTag(CATALOG_TAG, "max");
+
+    // One server-side Purchase event, deduplicated by the same id the browser
+    // uses. Analytics must never make a stored order fail.
+    try {
+      await recordServerPurchase({
+        reference: outcome.reference,
+        total: outcome.total,
+        attribution: normaliseAttribution(input.attribution),
+        createdAt: now,
+      });
+    } catch (error) {
+      console.error("[order] purchase event failed", error);
+    }
   }
 
   return {
     ok: true,
     reference: outcome.reference,
     whatsappHref: await confirmedOrderHref(outcome.reference, input.locale),
+    total: outcome.total,
   };
 }
 
@@ -275,7 +316,7 @@ export async function getOrderByReference(reference: string) {
   if (!order) return null;
   const items = await db
     .prepare(
-      "SELECT product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, qty FROM order_items WHERE order_id = ?",
+      "SELECT product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, unit_cost, qty FROM order_items WHERE order_id = ?",
     )
     .all<OrderItem>(order.id);
   return { order, items };
@@ -571,11 +612,64 @@ export async function deleteOrderNote(noteId: string): Promise<void> {
   await db.prepare("DELETE FROM order_notes WHERE id = ?").run(noteId);
 }
 
-export async function updateOrderStatus(reference: string, status: OrderStatus): Promise<void> {
+export async function updateOrderStatus(
+  reference: string,
+  status: OrderStatus,
+  changedBy = "",
+): Promise<void> {
   const db = await getDb();
-  await db
-    .prepare("UPDATE orders SET status = ?, updated_at = ? WHERE reference = ?")
-    .run(status, new Date().toISOString(), reference.toUpperCase());
+  const now = new Date().toISOString();
+  await db.transaction(async (tx) => {
+    const order = await tx
+      .prepare("SELECT id, status FROM orders WHERE reference = ?")
+      .get<{ id: string; status: OrderStatus }>(reference.toUpperCase());
+    if (!order || order.status === status) return;
+    await tx
+      .prepare("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?")
+      .run(status, now, order.id);
+    await recordOrderStatus(tx, order.id, status, now, changedBy, changedBy ? "admin" : "system");
+  });
+}
+
+/**
+ * Permanently remove an order and everything attached to it. Child rows are
+ * deleted explicitly (not left to `ON DELETE CASCADE`) so the delete is atomic
+ * on remote Turso databases too, where foreign-key enforcement may be off.
+ * Returns false when the reference does not exist.
+ */
+export async function deleteOrder(reference: string): Promise<boolean> {
+  const db = await getDb();
+  return db.transaction(async (tx) => {
+    const order = await tx
+      .prepare("SELECT id FROM orders WHERE reference = ?")
+      .get<{ id: string }>(reference.toUpperCase());
+    if (!order) return false;
+
+    await tx.prepare("DELETE FROM order_items WHERE order_id = ?").run(order.id);
+    await tx.prepare("DELETE FROM order_notes WHERE order_id = ?").run(order.id);
+    await tx.prepare("DELETE FROM order_status_history WHERE order_id = ?").run(order.id);
+    await tx.prepare("DELETE FROM order_attribution WHERE order_id = ?").run(order.id);
+
+    const result = await tx.prepare("DELETE FROM orders WHERE id = ?").run(order.id);
+    return result.changes > 0;
+  });
+}
+
+export type OrderStatusEvent = {
+  id: string;
+  status: OrderStatus;
+  changed_at: string;
+  changed_by: string;
+  source: string;
+};
+
+export async function getOrderStatusHistory(orderId: string): Promise<OrderStatusEvent[]> {
+  const db = await getDb();
+  return db
+    .prepare(
+      "SELECT id, status, changed_at, changed_by, source FROM order_status_history WHERE order_id = ? ORDER BY changed_at",
+    )
+    .all<OrderStatusEvent>(orderId);
 }
 
 /* ------------------------------------------------------------------ */

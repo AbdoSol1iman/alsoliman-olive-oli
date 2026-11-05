@@ -24,6 +24,8 @@ export const productVariantSchema = z.object({
   compareAt: z.coerce.number().int().min(0).max(10_000_000).nullable().default(null),
   /** null / undefined = stock not tracked. */
   stock: z.coerce.number().int().min(0).max(1_000_000).nullable().default(null),
+  /** null / undefined = cost unknown → gross profit stays unavailable. */
+  cost: z.coerce.number().int().min(0).max(10_000_000).nullable().default(null),
   sku: z.string().trim().max(64).default(""),
 });
 

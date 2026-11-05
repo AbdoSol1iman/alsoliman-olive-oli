@@ -73,6 +73,7 @@ export async function POST(request: Request) {
         ok: true,
         reference: result.reference,
         whatsappHref: result.whatsappHref,
+        total: result.total,
       },
       { status: 201, headers: noStore },
     );

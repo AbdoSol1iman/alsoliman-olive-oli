@@ -162,7 +162,179 @@ const SCHEMA = `
     updated_at TEXT NOT NULL,
     last_login_at TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    id TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );
 `;
+
+/* ------------------------------------------------------------------ */
+/* Versioned migrations                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Marketing analytics schema. Kept in a versioned migration (not only in
+ * `SCHEMA`) so existing databases are upgraded exactly once and the schema
+ * change is auditable.
+ */
+const MARKETING_SCHEMA = `
+  CREATE TABLE IF NOT EXISTS media_buyers (
+    id TEXT PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    email TEXT,
+    start_date TEXT,
+    platforms TEXT NOT NULL DEFAULT '[]',
+    monthly_budget INTEGER NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_media_buyers_active ON media_buyers(active);
+
+  CREATE TABLE IF NOT EXISTS marketing_campaigns (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    source TEXT NOT NULL DEFAULT 'manual',
+    external_id TEXT,
+    utm_campaign TEXT,
+    media_buyer_id TEXT REFERENCES media_buyers(id) ON DELETE SET NULL,
+    product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
+    landing_page TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_campaigns_platform ON marketing_campaigns(platform);
+  CREATE INDEX IF NOT EXISTS idx_campaigns_status ON marketing_campaigns(status);
+  CREATE INDEX IF NOT EXISTS idx_campaigns_buyer ON marketing_campaigns(media_buyer_id);
+  CREATE INDEX IF NOT EXISTS idx_campaigns_product ON marketing_campaigns(product_id);
+  CREATE INDEX IF NOT EXISTS idx_campaigns_utm ON marketing_campaigns(utm_campaign);
+
+  CREATE TABLE IF NOT EXISTS ad_spend_entries (
+    id TEXT PRIMARY KEY,
+    campaign_id TEXT NOT NULL REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    spend INTEGER NOT NULL DEFAULT 0,
+    impressions INTEGER,
+    reach INTEGER,
+    clicks INTEGER,
+    landing_page_views INTEGER,
+    platform_purchases INTEGER,
+    platform_revenue INTEGER,
+    source TEXT NOT NULL DEFAULT 'manual',
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(campaign_id, date, source)
+  );
+  CREATE INDEX IF NOT EXISTS idx_ad_spend_date ON ad_spend_entries(date);
+  CREATE INDEX IF NOT EXISTS idx_ad_spend_campaign_date ON ad_spend_entries(campaign_id, date);
+
+  CREATE TABLE IF NOT EXISTS tracking_events (
+    id TEXT PRIMARY KEY,
+    event_name TEXT NOT NULL,
+    visitor_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    path TEXT NOT NULL DEFAULT '',
+    product_id TEXT,
+    variant_id TEXT,
+    order_reference TEXT,
+    value INTEGER,
+    currency TEXT NOT NULL DEFAULT 'EGP',
+    utm_source TEXT,
+    utm_medium TEXT,
+    utm_campaign TEXT,
+    utm_content TEXT,
+    utm_term TEXT,
+    referrer TEXT,
+    landing_page TEXT,
+    metadata TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL DEFAULT 'website',
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_created ON tracking_events(created_at);
+  CREATE INDEX IF NOT EXISTS idx_events_name_created ON tracking_events(event_name, created_at);
+  CREATE INDEX IF NOT EXISTS idx_events_session ON tracking_events(session_id);
+  CREATE INDEX IF NOT EXISTS idx_events_visitor ON tracking_events(visitor_id);
+  CREATE INDEX IF NOT EXISTS idx_events_product ON tracking_events(product_id);
+  CREATE INDEX IF NOT EXISTS idx_events_order ON tracking_events(order_reference);
+  CREATE INDEX IF NOT EXISTS idx_events_utm_campaign ON tracking_events(utm_campaign);
+
+  CREATE TABLE IF NOT EXISTS order_attribution (
+    order_id TEXT PRIMARY KEY REFERENCES orders(id) ON DELETE CASCADE,
+    visitor_id TEXT,
+    session_id TEXT,
+    first_utm_source TEXT,
+    first_utm_medium TEXT,
+    first_utm_campaign TEXT,
+    first_utm_content TEXT,
+    first_utm_term TEXT,
+    first_referrer TEXT,
+    first_landing_page TEXT,
+    last_utm_source TEXT,
+    last_utm_medium TEXT,
+    last_utm_campaign TEXT,
+    last_utm_content TEXT,
+    last_utm_term TEXT,
+    last_referrer TEXT,
+    last_landing_page TEXT,
+    campaign_id TEXT REFERENCES marketing_campaigns(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_attribution_campaign ON order_attribution(campaign_id);
+  CREATE INDEX IF NOT EXISTS idx_attribution_last_utm ON order_attribution(last_utm_campaign);
+  CREATE INDEX IF NOT EXISTS idx_attribution_first_utm ON order_attribution(first_utm_campaign);
+
+  CREATE TABLE IF NOT EXISTS order_status_history (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    changed_at TEXT NOT NULL,
+    changed_by TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'system'
+  );
+  CREATE INDEX IF NOT EXISTS idx_status_history_order ON order_status_history(order_id, changed_at);
+  CREATE INDEX IF NOT EXISTS idx_status_history_changed ON order_status_history(changed_at);
+
+  CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders(status, created_at);
+  CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(phone);
+`;
+
+type Migration = { id: string; run: (db: Db) => Promise<void> };
+
+const MIGRATIONS: Migration[] = [
+  {
+    id: "2026-11-05-marketing-analytics",
+    run: async (db) => {
+      await db.exec(MARKETING_SCHEMA);
+    },
+  },
+  {
+    id: "2026-11-05-product-costs",
+    run: async (db) => {
+      // COGS is optional: only a cost entered by the owner makes gross profit
+      // available. `unit_cost` snapshots the value on the order line so later
+      // price/cost edits never rewrite historical profitability.
+      const variantColumns = await db
+        .prepare("PRAGMA table_info(product_variants)")
+        .all<{ name: string }>();
+      if (!variantColumns.some((c) => c.name === "cost")) {
+        await db.exec("ALTER TABLE product_variants ADD COLUMN cost INTEGER");
+      }
+      const itemColumns = await db
+        .prepare("PRAGMA table_info(order_items)")
+        .all<{ name: string }>();
+      if (!itemColumns.some((c) => c.name === "unit_cost")) {
+        await db.exec("ALTER TABLE order_items ADD COLUMN unit_cost INTEGER");
+      }
+    },
+  },
+];
 
 type Args = readonly unknown[];
 
@@ -258,6 +430,19 @@ async function migrate(db: Db) {
   if (!hasColumn("updated_at")) {
     await db.exec("ALTER TABLE orders ADD COLUMN updated_at TEXT");
   }
+
+  // Versioned schema upgrades. Each migration is applied once per database;
+  // every statement itself is also idempotent so a crash mid-run is safe.
+  const applied = new Set(
+    (await db.prepare("SELECT id FROM schema_migrations").all<{ id: string }>()).map((r) => r.id),
+  );
+  for (const migration of MIGRATIONS) {
+    if (applied.has(migration.id)) continue;
+    await migration.run(db);
+    await db
+      .prepare("INSERT OR IGNORE INTO schema_migrations (id, applied_at) VALUES (?, ?)")
+      .run(migration.id, new Date().toISOString());
+  }
 }
 
 /** First-run seed: move the original code catalog into the database. */
@@ -351,6 +536,28 @@ async function seed(db: Db) {
  */
 const globalForDb = globalThis as unknown as { __alsulimanDb?: Promise<Db> };
 
+const isBusyError = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null) return false;
+  const direct = (error as { code?: unknown }).code;
+  const cause = (error as { cause?: { code?: unknown } }).cause;
+  return direct === "SQLITE_BUSY" || cause?.code === "SQLITE_BUSY";
+};
+
+/**
+ * Another worker process may hold the write lock while running the same
+ * idempotent migration. Wait and retry instead of poisoning the build.
+ */
+async function withBusyRetry<T>(fn: () => Promise<T>, attempts = 8): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (!isBusyError(error) || attempt >= attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+}
+
 async function buildDb(): Promise<Db> {
   const url = process.env.TURSO_DATABASE_URL?.trim();
   const authToken = process.env.TURSO_AUTH_TOKEN?.trim();
@@ -367,11 +574,19 @@ async function buildDb(): Promise<Db> {
     } catch {
       // pragma unsupported — keep going (remote Turso handles this itself)
     }
+    // Multiple build workers can open the same file and run the idempotent
+    // schema migration at once. Ask SQLite to wait for the writer instead of
+    // failing the whole build with SQLITE_BUSY.
+    try {
+      await client.execute("PRAGMA busy_timeout = 15000");
+    } catch {
+      // pragma unsupported — the retry below still covers transient locks
+    }
   }
 
   const db = makeDb(client, client);
-  await migrate(db);
-  await seed(db);
+  await withBusyRetry(() => migrate(db));
+  await withBusyRetry(() => seed(db));
   return db;
 }
 

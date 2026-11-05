@@ -10,6 +10,8 @@ export type Variant = {
   compareAt: number | null;
   /** null = stock not tracked. */
   stock: number | null;
+  /** Unit cost entered by the owner. null = unknown (gross profit unavailable). */
+  cost: number | null;
   sku: string;
 };
 

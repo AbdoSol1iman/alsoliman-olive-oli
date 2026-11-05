@@ -44,6 +44,7 @@ type VariantRow = {
   price: number;
   compare_at: number | null;
   stock: number | null;
+  cost: number | null;
   sku: string;
   sort_order: number;
 };
@@ -99,6 +100,7 @@ function mapProduct(
       price: v.price,
       compareAt: v.compare_at,
       stock: v.stock,
+      cost: v.cost ?? null,
       sku: v.sku,
     }));
 
@@ -258,8 +260,8 @@ function invalidateCatalog() {
 async function writeVariants(tx: Db, productId: string, variants: ProductInput["variants"]) {
   await tx.prepare("DELETE FROM product_variants WHERE product_id = ?").run(productId);
   const stmt = tx.prepare(
-    `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, sku, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, cost, sku, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const [index, v] of variants.entries()) {
     await stmt.run(
@@ -271,6 +273,7 @@ async function writeVariants(tx: Db, productId: string, variants: ProductInput["
       v.price,
       v.compareAt,
       v.stock,
+      v.cost,
       v.sku,
       index,
     );

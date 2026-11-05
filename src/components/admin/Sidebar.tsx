@@ -131,6 +131,7 @@ const links: { href: string; label: string; kind: IconKind; exact?: boolean }[] 
   { href: "/admin/products", label: "المنتجات", kind: "box" },
   { href: "/admin/categories", label: "التصنيفات", kind: "tag" },
   { href: "/admin/orders", label: "الطلبات", kind: "receipt" },
+  { href: "/admin/marketing", label: "تحليلات التسويق", kind: "chart" },
   { href: "/admin/customers", label: "العملاء", kind: "users" },
   { href: "/admin/media", label: "مكتبة الوسائط", kind: "image" },
   { href: "/admin/homepage", label: "محرر الصفحة الرئيسية", kind: "home" },
@@ -204,13 +205,13 @@ export function Sidebar({ name, email }: { name: string; email: string }) {
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col bg-forest-deep text-ivory lg:flex">
+      <aside className="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col bg-forest-deep text-ivory print:hidden lg:flex">
         {identity}
         {nav}
       </aside>
 
       {/* Mobile top bar */}
-      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-gold/20 bg-forest-deep px-4 text-ivory lg:hidden">
+      <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b border-gold/20 bg-forest-deep px-4 text-ivory print:hidden lg:hidden">
         <div className="flex items-center gap-2.5">
           <BrandMark size={22} />
           <span className="font-display text-[0.95rem] text-gold-pale">لوحة التحكم</span>
@@ -230,7 +231,7 @@ export function Sidebar({ name, email }: { name: string; email: string }) {
 
       {/* Mobile drawer */}
       {open ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 print:hidden lg:hidden">
           <button
             type="button"
             aria-label="إغلاق القائمة"

@@ -203,3 +203,43 @@
   50% { opacity: 1; }
   100% { opacity: 0.5; }
 }
+
+/* ------------------------------------------------------------------ */
+/* Printable marketing reports                                        */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #main {
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+  }
+
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+}

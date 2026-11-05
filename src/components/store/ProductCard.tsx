@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ArrowEnd, Check, Plus } from "@/components/ui/Icons";
 import { useCartStore } from "@/lib/cart-store";
 import { useAddToCart } from "@/lib/catalog-client";
+import { trackEvent } from "@/lib/analytics";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { ListingItem, Locale } from "@/lib/products";
@@ -39,6 +40,12 @@ export function ProductCard({
 
   const onQuickAdd = () => {
     add(product.id, variant.id, 1);
+    trackEvent("AddToCart", {
+      productId: product.id,
+      variantId: variant.id,
+      value: variant.price,
+      metadata: { qty: 1, placement: "card" },
+    });
     openCart();
     setJustAdded(true);
     window.setTimeout(() => setJustAdded(false), 1800);

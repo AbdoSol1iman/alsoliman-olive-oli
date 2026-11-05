@@ -35,6 +35,7 @@ const newVariant = (n: number): VariantDraft => ({
   price: 0,
   compareAt: null,
   stock: null,
+  cost: null,
   sku: "",
 });
 
@@ -92,6 +93,7 @@ const fromProduct = (p: Product): ProductInput => ({
     price: v.price,
     compareAt: v.compareAt,
     stock: v.stock,
+    cost: v.cost,
     sku: v.sku,
   })),
   // The editor works with real images only (no synthetic fallback).
@@ -430,6 +432,20 @@ export function ProductForm({
                 onChange={(e) => {
                   const next = [...draft.variants];
                   next[i] = { ...v, price: num(e.target.value) };
+                  set("variants", next);
+                }}
+              />
+              <TextInput
+                label="تكلفة الوحدة"
+                name={`v-${i}-cost`}
+                type="number"
+                min={0}
+                hint="اختياري — لحساب الربح الإجمالي"
+                className="md:col-span-2"
+                value={v.cost ?? ""}
+                onChange={(e) => {
+                  const next = [...draft.variants];
+                  next[i] = { ...v, cost: e.target.value === "" ? null : num(e.target.value) };
                   set("variants", next);
                 }}
               />

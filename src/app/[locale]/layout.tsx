@@ -8,6 +8,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { WhatsAppButton } from "@/components/layout/WhatsAppButton";
 import { CatalogProvider } from "@/lib/catalog-client";
+import { TrackingProvider } from "@/components/analytics/TrackingProvider";
 import { getCatalog } from "@/lib/catalog";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
@@ -88,16 +89,18 @@ export default async function LocaleLayout({
         >
           {locale === "ar" ? "تخطَّ إلى المحتوى" : "Skip to content"}
         </a>
-        <CatalogProvider products={products}>
-          <AnnouncementBar locale={locale} items={announcements} />
-          <Header locale={locale} dict={dict} logoSrc={settings.store.logoPath} />
-          <main id="main" className="flex-1">
-            {children}
-          </main>
-          <Footer locale={locale} dict={dict} contact={contact} logoSrc={settings.store.logoPath} />
-          <CartDrawer locale={locale} dict={dict} />
-          <WhatsAppButton dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
-        </CatalogProvider>
+        <TrackingProvider>
+          <CatalogProvider products={products}>
+            <AnnouncementBar locale={locale} items={announcements} />
+            <Header locale={locale} dict={dict} logoSrc={settings.store.logoPath} />
+            <main id="main" className="flex-1">
+              {children}
+            </main>
+            <Footer locale={locale} dict={dict} contact={contact} logoSrc={settings.store.logoPath} />
+            <CartDrawer locale={locale} dict={dict} />
+            <WhatsAppButton dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
+          </CatalogProvider>
+        </TrackingProvider>
       </body>
     </html>
   );

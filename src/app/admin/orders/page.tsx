@@ -4,6 +4,7 @@ import { countOrders, listOrders, ORDER_STATUSES } from "@/lib/orders";
 import { formatDate, formatPrice } from "@/lib/format";
 import { connection } from "next/server";
 import { EmptyState, STATUS_LABELS, StatusBadge, Table, Td, Th } from "@/components/admin/ui";
+import { OrderDeleteButton } from "@/components/admin/OrderPanels";
 
 export const instant = false;
 
@@ -145,6 +146,7 @@ export default async function AdminOrdersPage({
               <Th>الإجمالي</Th>
               <Th>الدفع</Th>
               <Th>الحالة</Th>
+              <Th>إجراء</Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gold/12 bg-ivory">
@@ -170,6 +172,9 @@ export default async function AdminOrdersPage({
                 </Td>
                 <Td>
                   <StatusBadge status={o.status} />
+                </Td>
+                <Td>
+                  <OrderDeleteButton reference={o.reference} compact />
                 </Td>
               </tr>
             ))}

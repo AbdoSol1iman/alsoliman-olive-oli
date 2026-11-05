@@ -49,11 +49,11 @@ export default async function AdminRootLayout({ children }: { children: React.Re
 
         <Sidebar name={session.name} email={session.email} />
 
-        <div className="lg:ps-64">
+        <div className="lg:ps-64 print:ps-0">
           <main id="main" className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">
             {children}
           </main>
-          <footer className="mx-auto w-full max-w-[1400px] px-4 pb-8 md:px-8">
+          <footer className="mx-auto w-full max-w-[1400px] px-4 pb-8 print:hidden md:px-8">
             <p className="border-t border-gold/20 pt-5 text-[0.7rem] text-ink-muted/70">
               لوحة تحكم آل سليمان — البيانات محفوظة في قاعدة بيانات محلية.
             </p>

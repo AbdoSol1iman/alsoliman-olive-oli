@@ -37,5 +37,9 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|api|.*\\..*).*)"],
+  // Export routes are API surfaces: let them answer 401 themselves instead of
+  // redirecting unauthenticated programmatic clients to the HTML login page.
+  matcher: [
+    "/((?!_next/static|_next/image|api|admin/marketing/export|admin/orders/export|.*\\..*).*)",
+  ],
 };

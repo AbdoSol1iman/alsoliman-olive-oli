@@ -6,7 +6,7 @@ import { getSettingsAdmin } from "@/lib/settings";
 import { formatDate, formatPrice } from "@/lib/format";
 import { connection } from "next/server";
 import { AdminCard, StatusBadge } from "@/components/admin/ui";
-import { OrderNotes, OrderStatusForm } from "@/components/admin/OrderPanels";
+import { OrderDeleteButton, OrderNotes, OrderStatusForm } from "@/components/admin/OrderPanels";
 
 export const instant = false;
 
@@ -128,6 +128,14 @@ export default async function AdminOrderPage({
           <OrderNotes orderId={order.id} notes={notes} />
         </AdminCard>
       </div>
+
+      <AdminCard
+        title="حذف الطلب"
+        description="حذف نهائي لأصناف الطلب وملاحظاته وسجل حالته. لا يمكن التراجع."
+        className="border-red-900/25"
+      >
+        <OrderDeleteButton reference={order.reference} redirectTo="/admin/orders" />
+      </AdminCard>
     </div>
   );
 }
