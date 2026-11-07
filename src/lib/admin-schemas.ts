@@ -61,6 +61,7 @@ export const productInputSchema = z.object({
   specs: z.array(productSpecSchema).max(20).default([]),
   active: z.boolean().default(true),
   featured: z.boolean().default(false),
+  comingSoon: z.boolean().default(false),
   sample: z.boolean().default(false),
   sortOrder: z.coerce.number().int().min(-10_000).max(10_000).default(0),
   lowStockThreshold: z.coerce.number().int().min(0).max(1000).default(5),

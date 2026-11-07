@@ -57,6 +57,7 @@ const emptyDraft = (): ProductInput => ({
   specs: [],
   active: true,
   featured: false,
+  comingSoon: false,
   sample: false,
   sortOrder: 0,
   lowStockThreshold: 5,
@@ -82,6 +83,7 @@ const fromProduct = (p: Product): ProductInput => ({
   specs: p.specs,
   active: p.active,
   featured: p.featured,
+  comingSoon: p.comingSoon,
   sample: p.sample,
   sortOrder: p.sortOrder,
   lowStockThreshold: p.lowStockThreshold,
@@ -190,6 +192,15 @@ export function ProductForm({
       if (target < 0 || target >= images.length) return d;
       [images[index], images[target]] = [images[target], images[index]];
       return { ...d, images };
+    });
+
+  const moveVariant = (index: number, dir: -1 | 1) =>
+    setDraft((d) => {
+      const variants = [...d.variants];
+      const target = index + dir;
+      if (target < 0 || target >= variants.length) return d;
+      [variants[index], variants[target]] = [variants[target], variants[index]];
+      return { ...d, variants };
     });
 
   const setPrimary = (index: number) =>
@@ -372,7 +383,7 @@ export function ProductForm({
       {/* variants */}
       <AdminCard
         title="الأحجام والأسعار"
-        description="كل حجم = SKU مستقل بسعره ومخزونه. السعر المخفض (compareAt) اختياري ويظهر مشطوبًا."
+        description="كل حجم = SKU مستقل بسعره ومخزونه. استخدم الأسهم لتغيير ترتيب ظهور الأحجام في المتجر — الترتيب هنا هو الترتيب المعروض."
         action={
           <MiniButton onClick={() => set("variants", [...draft.variants, newVariant(draft.variants.length + 1)])}>
             + حجم
@@ -493,18 +504,35 @@ export function ProductForm({
                 <p className="tnum text-[0.72rem] text-ink-muted">
                   {formatPrice(v.price)} {v.stock !== null ? `· مخزون ${v.stock}` : "· غير متتبع"}
                 </p>
-                <MiniButton
-                  onClick={() =>
-                    set(
-                      "variants",
-                      draft.variants.filter((_, j) => j !== i),
-                    )
-                  }
-                  disabled={draft.variants.length <= 1}
-                  className="text-red-900"
-                >
-                  حذف الحجم
-                </MiniButton>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[0.68rem] text-ink-muted">الترتيب</span>
+                  <MiniButton
+                    onClick={() => moveVariant(i, -1)}
+                    disabled={i === 0}
+                    aria-label="تحريك الحجم لأعلى"
+                  >
+                    ↑
+                  </MiniButton>
+                  <MiniButton
+                    onClick={() => moveVariant(i, 1)}
+                    disabled={i === draft.variants.length - 1}
+                    aria-label="تحريك الحجم لأسفل"
+                  >
+                    ↓
+                  </MiniButton>
+                  <MiniButton
+                    onClick={() =>
+                      set(
+                        "variants",
+                        draft.variants.filter((_, j) => j !== i),
+                      )
+                    }
+                    disabled={draft.variants.length <= 1}
+                    className="text-red-900"
+                  >
+                    حذف الحجم
+                  </MiniButton>
+                </div>
               </div>
             </div>
           ))}
@@ -691,6 +719,14 @@ export function ProductForm({
               مميز (يظهر في الرئيسية)
             </label>
             <label className="flex items-center gap-3 text-[0.82rem] text-forest">
+              <Toggle
+                label="قريبًا"
+                checked={draft.comingSoon}
+                onChange={(v) => set("comingSoon", v)}
+              />
+              قريبًا (يظهر في المتجر بدون إمكانية الشراء)
+            </label>
+            <label className="flex items-center gap-3 text-[0.82rem] text-forest">
               <Toggle label="بيانات تجريبية" checked={draft.sample} onChange={(v) => set("sample", v)} />
               بيانات تجريبية (إشعار الأسعار)
             </label>
@@ -700,7 +736,7 @@ export function ProductForm({
               label="ترتيب العرض"
               name="sortOrder"
               type="number"
-              hint="الأصغر أولًا."
+              hint="الأصغر أولًا — أو استخدم أسهم الترتيب في قائمة المنتجات."
               value={draft.sortOrder}
               onChange={(e) => set("sortOrder", num(e.target.value))}
             />

@@ -48,7 +48,9 @@ export const useCartLines = (): CartLine[] => {
   return useMemo(
     () =>
       items.flatMap((entry) => {
-        const product = products.find((p) => p.id === entry.productId && p.active);
+        const product = products.find(
+          (p) => p.id === entry.productId && p.active && !p.comingSoon,
+        );
         const variant = product?.variants.find((v) => v.id === entry.variantId);
         if (!product || !variant) return [];
         const qty = clampQty(entry.qty, variant.stock);
@@ -74,7 +76,9 @@ export const useCartSubtotal = () =>
 export function useAddToCart() {
   const products = useCatalogProducts();
   return (productId: string, variantId: string, qty = 1) => {
-    const product = products.find((p) => p.id === productId && p.active);
+    const product = products.find(
+      (p) => p.id === productId && p.active && !p.comingSoon,
+    );
     const variant = product?.variants.find((v) => v.id === variantId);
     if (!product || !variant) return;
     const state = useCartStore.getState();

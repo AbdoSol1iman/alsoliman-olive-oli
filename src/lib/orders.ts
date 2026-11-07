@@ -118,7 +118,9 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
   }
 
   const lines = [...requested.values()].flatMap((item) => {
-    const product = products.find((p) => p.id === item.productId && p.active);
+    const product = products.find(
+      (p) => p.id === item.productId && p.active && !p.comingSoon,
+    );
     const variant = product?.variants.find((v) => v.id === item.variantId);
     if (!product || !variant) return [];
     if (variant.stock !== null && variant.stock < item.qty) return [];

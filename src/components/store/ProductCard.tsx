@@ -30,7 +30,9 @@ export function ProductCard({
   const openCart = useCartStore((s) => s.open);
   const [justAdded, setJustAdded] = useState(false);
   const href = `/${locale}/product/${product.slug}?size=${variant.id}`;
+  const comingSoon = product.comingSoon;
   const soldOut = variant.stock !== null && variant.stock <= 0;
+  const unavailable = comingSoon || soldOut;
   const low =
     variant.stock !== null &&
     variant.stock > 0 &&
@@ -39,6 +41,7 @@ export function ProductCard({
   const size = locale === "ar" ? variant.sizeLabelAr : variant.sizeLabelEn;
 
   const onQuickAdd = () => {
+    if (unavailable) return;
     add(product.id, variant.id, 1);
     trackEvent("AddToCart", {
       productId: product.id,
@@ -83,7 +86,11 @@ export function ProductCard({
             {size}
           </span>
 
-          {soldOut ? (
+          {comingSoon ? (
+            <span className="absolute end-3 top-3 rounded-xs bg-gold/90 px-2.5 py-1 text-[0.6rem] text-forest-deep">
+              {dict.common.comingSoon}
+            </span>
+          ) : soldOut ? (
             <span className="absolute end-3 top-3 rounded-xs bg-forest/90 px-2.5 py-1 text-[0.6rem] text-ivory">
               {dict.common.outOfStock}
             </span>
@@ -131,19 +138,27 @@ export function ProductCard({
       <button
         type="button"
         onClick={onQuickAdd}
-        disabled={soldOut}
-        aria-label={`${dict.common.addToCart} — ${name} ${size}`}
+        disabled={unavailable}
+        aria-label={`${comingSoon ? dict.common.comingSoon : dict.common.addToCart} — ${name} ${size}`}
         className={cx(
           "mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xs border text-[0.8rem] tracking-wide transition-all duration-300",
-          soldOut
-            ? "cursor-not-allowed border-forest/12 text-ink-muted/50"
-            : justAdded
-              ? "border-forest bg-forest text-ivory"
-              : "border-forest/20 text-forest hover:border-forest hover:bg-forest hover:text-ivory",
+          comingSoon
+            ? "cursor-not-allowed border-gold/40 bg-gold/15 text-forest"
+            : soldOut
+              ? "cursor-not-allowed border-forest/12 text-ink-muted/50"
+              : justAdded
+                ? "border-forest bg-forest text-ivory"
+                : "border-forest/20 text-forest hover:border-forest hover:bg-forest hover:text-ivory",
         )}
       >
         {justAdded ? <Check size={15} /> : <Plus size={15} />}
-        {soldOut ? dict.common.outOfStock : justAdded ? dict.common.added : dict.common.addToCart}
+        {comingSoon
+          ? dict.common.comingSoon
+          : soldOut
+            ? dict.common.outOfStock
+            : justAdded
+              ? dict.common.added
+              : dict.common.addToCart}
       </button>
     </article>
   );

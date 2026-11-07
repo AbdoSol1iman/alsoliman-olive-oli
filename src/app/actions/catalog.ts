@@ -68,7 +68,7 @@ export async function deleteProductAction(productId: string): Promise<ActionResu
 
 export async function toggleProductFlagAction(
   productId: string,
-  flag: "active" | "featured",
+  flag: "active" | "featured" | "comingSoon",
   value: boolean,
 ): Promise<ActionResult> {
   await requireAdmin();

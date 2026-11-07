@@ -23,7 +23,8 @@ export default async function AdminProductsPage() {
         <div>
           <h1 className="text-[1.7rem] text-forest">المنتجات</h1>
           <p className="mt-1 text-[0.82rem] text-ink-muted">
-            {products.length} منتج في الكتالوج. أي تعديل هنا يظهر في المتجر فورًا بدون إعادة نشر.
+            {products.length} منتج في الكتالوج. استخدم الأسهم في عمود «الترتيب» لتغيير ترتيب
+            المنتجات، وأسهم الأحجام داخل صفحة التعديل لتغيير ترتيب الأحجام. كل تعديل يظهر فورًا.
           </p>
         </div>
         <Link
@@ -73,7 +74,14 @@ export default async function AdminProductsPage() {
                         />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[0.85rem] text-forest">{p.nameAr}</p>
+                        <p className="flex flex-wrap items-center gap-2 text-[0.85rem] text-forest">
+                          {p.nameAr}
+                          {p.comingSoon ? (
+                            <span className="rounded-full bg-gold/25 px-2 py-0.5 text-[0.62rem] text-forest">
+                              قريبًا
+                            </span>
+                          ) : null}
+                        </p>
                         <p className="text-[0.68rem] text-ink-muted" dir="ltr">
                           /{p.slug}
                         </p>
@@ -113,7 +121,12 @@ export default async function AdminProductsPage() {
                     )}
                   </Td>
                   <Td>
-                    <ProductFlags id={p.id} active={p.active} featured={p.featured} />
+                    <ProductFlags
+                      id={p.id}
+                      active={p.active}
+                      featured={p.featured}
+                      comingSoon={p.comingSoon}
+                    />
                   </Td>
                   <Td className="tnum">{p.sortOrder}</Td>
                   <Td>
