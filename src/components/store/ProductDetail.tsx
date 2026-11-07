@@ -31,7 +31,9 @@ export function ProductDetail({
   const [added, setAdded] = useState(false);
   const add = useAddToCart();
 
+  const comingSoon = product.comingSoon;
   const soldOut = variant.stock !== null && variant.stock <= 0;
+  const unavailable = comingSoon || soldOut;
   const name = locale === "ar" ? product.nameAr : product.nameEn;
   const images = product.images;
 
@@ -44,6 +46,7 @@ export function ProductDetail({
   }, [product.id, variant.id, variant.price]);
 
   const onAdd = () => {
+    if (unavailable) return;
     add(product.id, variant.id, qty);
     trackEvent("AddToCart", {
       productId: product.id,
@@ -137,25 +140,38 @@ export function ProductDetail({
           <span
             className={cx(
               "mb-2 ms-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.68rem]",
-              soldOut
-                ? "bg-forest/10 text-ink-muted"
-                : "bg-sage/25 text-forest",
+              comingSoon
+                ? "bg-gold/20 text-forest"
+                : soldOut
+                  ? "bg-forest/10 text-ink-muted"
+                  : "bg-sage/25 text-forest",
             )}
           >
             <span
               aria-hidden
-              className={cx("size-1.5 rounded-full", soldOut ? "bg-ink-muted" : "bg-sage-deep")}
+              className={cx(
+                "size-1.5 rounded-full",
+                comingSoon ? "bg-gold" : soldOut ? "bg-ink-muted" : "bg-sage-deep",
+              )}
             />
-            {soldOut
-              ? dict.common.outOfStock
-              : variant.stock !== null && variant.stock <= 5
-                ? dict.product.stockLeft.replace("{n}", String(variant.stock))
-                : dict.common.inStock}
+            {comingSoon
+              ? dict.common.comingSoon
+              : soldOut
+                ? dict.common.outOfStock
+                : variant.stock !== null && variant.stock <= 5
+                  ? dict.product.stockLeft.replace("{n}", String(variant.stock))
+                  : dict.common.inStock}
           </span>
         </div>
 
         {product.sample ? (
           <p className="mt-4 text-[0.68rem] text-gold/90">{dict.product.sampleNotice}</p>
+        ) : null}
+
+        {comingSoon ? (
+          <p className="mt-4 border border-gold/40 bg-gold/10 px-4 py-3 text-[0.78rem] leading-6 text-forest">
+            {dict.product.comingSoonNotice}
+          </p>
         ) : null}
 
         <fieldset className="mt-8">
@@ -192,26 +208,34 @@ export function ProductDetail({
         </fieldset>
 
         <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-[0.7rem] tracking-[0.18em] text-ink-muted">
-              {dict.product.quantity}
-            </span>
-            <QuantityStepper
-              value={qty}
-              max={variant.stock}
-              onChange={setQty}
-              label={dict.product.quantity}
-            />
-          </div>
+          {!comingSoon ? (
+            <div className="flex items-center gap-3">
+              <span className="text-[0.7rem] tracking-[0.18em] text-ink-muted">
+                {dict.product.quantity}
+              </span>
+              <QuantityStepper
+                value={qty}
+                max={variant.stock}
+                onChange={setQty}
+                label={dict.product.quantity}
+              />
+            </div>
+          ) : null}
           <Button
             onClick={onAdd}
-            disabled={soldOut}
+            disabled={unavailable}
             size="lg"
             className="flex-1"
             aria-live="polite"
           >
             {added ? <Check size={17} /> : null}
-            {soldOut ? dict.common.outOfStock : added ? dict.product.added : dict.product.addToCart}
+            {comingSoon
+              ? dict.common.comingSoon
+              : soldOut
+                ? dict.common.outOfStock
+                : added
+                  ? dict.product.added
+                  : dict.product.addToCart}
           </Button>
         </div>
 

@@ -50,6 +50,8 @@ export type Product = {
   badgeEn: string | null;
   /** Hidden products disappear from the storefront but keep their data. */
   active: boolean;
+  /** Coming-soon products stay visible but cannot be added to the cart or ordered. */
+  comingSoon: boolean;
   /** Featured products are shown in the homepage grid. */
   featured: boolean;
   sortOrder: number;
@@ -80,7 +82,10 @@ export type ListingItem = {
   variant: Variant;
 };
 
-/** Shop grid: every variant of every (active) product, smallest size first. */
+/**
+ * Shop grid: every variant of every (active) product, in the exact product
+ * and variant order the owner arranged in the dashboard.
+ */
 export const buildListingItems = (products: Product[]): ListingItem[] =>
   products
     .filter((p) => p.active)
@@ -90,10 +95,9 @@ export const buildListingItems = (products: Product[]): ListingItem[] =>
         product,
         variant,
       })),
-    )
-    .sort((a, b) => a.variant.ml - b.variant.ml);
+    );
 
-/** Homepage grid: featured products only (first variant of each). */
+/** Homepage grid: featured products only, in the owner-defined order. */
 export const buildFeaturedItems = (products: Product[]): ListingItem[] =>
   products
     .filter((p) => p.active && p.featured)
@@ -103,8 +107,7 @@ export const buildFeaturedItems = (products: Product[]): ListingItem[] =>
         product,
         variant,
       })),
-    )
-    .sort((a, b) => a.variant.ml - b.variant.ml);
+    );
 
 export const buildSizeFilters = (products: Product[]) =>
   products

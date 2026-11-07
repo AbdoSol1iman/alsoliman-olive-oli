@@ -30,6 +30,7 @@ type ProductRow = {
   specs: string;
   active: number;
   featured: number;
+  coming_soon: number;
   sort_order: number;
   sample: number;
   low_stock_threshold: number;
@@ -127,6 +128,7 @@ function mapProduct(
     badgeEn: row.badge_en,
     active: row.active === 1,
     featured: row.featured === 1,
+    comingSoon: row.coming_soon === 1,
     sortOrder: row.sort_order,
     sample: row.sample === 1,
     lowStockThreshold: row.low_stock_threshold,
@@ -309,9 +311,9 @@ export async function createProduct(input: ProductInput): Promise<string> {
       `INSERT INTO products (
         id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
         hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
-        badge_ar, badge_en, specs, active, featured, sort_order, sample,
+        badge_ar, badge_en, specs, active, featured, coming_soon, sort_order, sample,
         low_stock_threshold, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.slug,
@@ -331,6 +333,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
       JSON.stringify(input.specs),
       input.active ? 1 : 0,
       input.featured ? 1 : 0,
+      input.comingSoon ? 1 : 0,
       input.sortOrder,
       input.sample ? 1 : 0,
       input.lowStockThreshold,
@@ -354,7 +357,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       `UPDATE products SET
         slug = ?, category_id = ?, name_ar = ?, name_en = ?, subtitle_ar = ?, subtitle_en = ?,
         hook_ar = ?, hook_en = ?, description_ar = ?, description_en = ?, storage_ar = ?, storage_en = ?,
-        badge_ar = ?, badge_en = ?, specs = ?, active = ?, featured = ?, sort_order = ?, sample = ?,
+        badge_ar = ?, badge_en = ?, specs = ?, active = ?, featured = ?, coming_soon = ?, sort_order = ?, sample = ?,
         low_stock_threshold = ?, updated_at = ?
       WHERE id = ?`,
     ).run(
@@ -375,6 +378,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       JSON.stringify(input.specs),
       input.active ? 1 : 0,
       input.featured ? 1 : 0,
+      input.comingSoon ? 1 : 0,
       input.sortOrder,
       input.sample ? 1 : 0,
       input.lowStockThreshold,
@@ -396,7 +400,7 @@ export async function deleteProduct(id: string): Promise<void> {
 
 export async function setProductFlags(
   id: string,
-  flags: { active?: boolean; featured?: boolean },
+  flags: { active?: boolean; featured?: boolean; comingSoon?: boolean },
 ): Promise<void> {
   const db = await getDb();
   const sets: string[] = [];
@@ -408,6 +412,10 @@ export async function setProductFlags(
   if (flags.featured !== undefined) {
     sets.push("featured = ?");
     values.push(flags.featured ? 1 : 0);
+  }
+  if (flags.comingSoon !== undefined) {
+    sets.push("coming_soon = ?");
+    values.push(flags.comingSoon ? 1 : 0);
   }
   if (!sets.length) return;
   sets.push("updated_at = ?");

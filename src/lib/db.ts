@@ -88,6 +88,7 @@ const SCHEMA = `
     specs TEXT NOT NULL DEFAULT '[]',
     active INTEGER NOT NULL DEFAULT 1,
     featured INTEGER NOT NULL DEFAULT 0,
+    coming_soon INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     sample INTEGER NOT NULL DEFAULT 0,
     low_stock_threshold INTEGER NOT NULL DEFAULT 5,
@@ -331,6 +332,21 @@ const MIGRATIONS: Migration[] = [
         .all<{ name: string }>();
       if (!itemColumns.some((c) => c.name === "unit_cost")) {
         await db.exec("ALTER TABLE order_items ADD COLUMN unit_cost INTEGER");
+      }
+    },
+  },
+  {
+    id: "2026-11-07-product-coming-soon",
+    run: async (db) => {
+      // Coming-soon products stay visible in the storefront but cannot be
+      // added to the cart or ordered until the owner turns the flag off.
+      const productColumns = await db
+        .prepare("PRAGMA table_info(products)")
+        .all<{ name: string }>();
+      if (!productColumns.some((c) => c.name === "coming_soon")) {
+        await db.exec(
+          "ALTER TABLE products ADD COLUMN coming_soon INTEGER NOT NULL DEFAULT 0",
+        );
       }
     },
   },

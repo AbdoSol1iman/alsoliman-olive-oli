@@ -102,7 +102,7 @@ async function ProductBody({
           priceCurrency: "EGP",
           price: v.price,
           availability:
-            v.stock !== null && v.stock <= 0
+            product.comingSoon || (v.stock !== null && v.stock <= 0)
               ? "https://schema.org/OutOfStock"
               : "https://schema.org/InStock",
         })),
