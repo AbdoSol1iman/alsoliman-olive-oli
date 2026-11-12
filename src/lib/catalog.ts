@@ -34,6 +34,7 @@ type ProductRow = {
   sort_order: number;
   sample: number;
   low_stock_threshold: number;
+  family_slug: string | null;
 };
 
 type VariantRow = {
@@ -145,6 +146,7 @@ function mapProduct(
     sortOrder: row.sort_order,
     sample: row.sample === 1,
     lowStockThreshold: row.low_stock_threshold,
+    familySlug: row.family_slug ?? null,
   };
 }
 
@@ -284,6 +286,22 @@ export async function productSlugExists(slug: string, excludeId?: string | null)
   return Boolean(row);
 }
 
+/**
+ * Which product now owns this size? Used by old `?size=` links after the size
+ * split: one lightweight query instead of loading the whole catalog.
+ */
+export async function findProductSlugByVariant(variantId: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db
+    .prepare(
+      `SELECT p.slug FROM product_variants v
+       JOIN products p ON p.id = v.product_id
+       WHERE v.id = ? LIMIT 1`,
+    )
+    .get<{ slug: string }>(variantId);
+  return row?.slug ?? null;
+}
+
 /** Categories only — avoids loading the entire product catalog just for names. */
 export async function listCategoriesAdmin(): Promise<Category[]> {
   const db = await getDb();
@@ -421,8 +439,8 @@ export async function createProduct(input: ProductInput): Promise<string> {
         id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
         hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
         badge_ar, badge_en, specs, active, featured, coming_soon, sort_order, sample,
-        low_stock_threshold, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        low_stock_threshold, family_slug, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.slug,
@@ -446,6 +464,7 @@ export async function createProduct(input: ProductInput): Promise<string> {
       input.sortOrder,
       input.sample ? 1 : 0,
       input.lowStockThreshold,
+      input.familySlug ?? input.slug,
       now,
       now,
     );
@@ -467,7 +486,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
         slug = ?, category_id = ?, name_ar = ?, name_en = ?, subtitle_ar = ?, subtitle_en = ?,
         hook_ar = ?, hook_en = ?, description_ar = ?, description_en = ?, storage_ar = ?, storage_en = ?,
         badge_ar = ?, badge_en = ?, specs = ?, active = ?, featured = ?, coming_soon = ?, sort_order = ?, sample = ?,
-        low_stock_threshold = ?, updated_at = ?
+        low_stock_threshold = ?, family_slug = ?, updated_at = ?
       WHERE id = ?`,
     ).run(
       input.slug,
@@ -491,6 +510,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
       input.sortOrder,
       input.sample ? 1 : 0,
       input.lowStockThreshold,
+      input.familySlug ?? input.slug,
       now,
       id,
     );

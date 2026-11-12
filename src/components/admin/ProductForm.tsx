@@ -39,6 +39,7 @@ const newVariant = (): VariantDraft => ({
 
 const emptyDraft = (): ProductInput => ({
   slug: "",
+  familySlug: null,
   categoryId: null,
   nameAr: "",
   nameEn: "",
@@ -65,6 +66,7 @@ const emptyDraft = (): ProductInput => ({
 
 const fromProduct = (p: Product): ProductInput => ({
   slug: p.slug,
+  familySlug: p.familySlug,
   categoryId: p.categoryId,
   nameAr: p.nameAr,
   nameEn: p.nameEn,
@@ -197,45 +199,11 @@ export function ProductForm({
       return { ...d, images };
     });
 
-  const moveVariant = (index: number, dir: -1 | 1) =>
-    setDraft((d) => {
-      const variants = [...d.variants];
-      const target = index + dir;
-      if (target < 0 || target >= variants.length) return d;
-      [variants[index], variants[target]] = [variants[target], variants[index]];
-      return { ...d, variants };
-    });
-
   const setPrimary = (index: number) =>
     setDraft((d) => ({
       ...d,
       images: d.images.map((img, i) => ({ ...img, isPrimary: i === index })),
     }));
-
-  const addVariantImage = (variantIndex: number, src: string) =>
-    setDraft((d) => {
-      const variants = [...d.variants];
-      const variant = variants[variantIndex];
-      variants[variantIndex] = {
-        ...variant,
-        images: [
-          ...variant.images,
-          { src, altAr: d.nameAr, altEn: d.nameEn },
-        ].slice(0, 12),
-      };
-      return { ...d, variants };
-    });
-
-  const removeVariantImage = (variantIndex: number, imageIndex: number) =>
-    setDraft((d) => {
-      const variants = [...d.variants];
-      const variant = variants[variantIndex];
-      variants[variantIndex] = {
-        ...variant,
-        images: variant.images.filter((_, i) => i !== imageIndex),
-      };
-      return { ...d, variants };
-    });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -244,22 +212,26 @@ export function ProductForm({
     setFieldErrors({});
 
     // Normalise empties → null before validation.
+    const variant = draft.variants[0];
     const payload = {
       ...draft,
+      familySlug: draft.familySlug?.trim() ? draft.familySlug.trim() : null,
       badgeAr: draft.badgeAr?.trim() ? draft.badgeAr : null,
       badgeEn: draft.badgeEn?.trim() ? draft.badgeEn : null,
       descriptionAr: draft.descriptionAr.map((s) => s.trim()).filter(Boolean),
       descriptionEn: draft.descriptionEn.map((s) => s.trim()).filter(Boolean),
-      variants: draft.variants.map((v) => ({
-        ...v,
-        compareAt: v.compareAt !== null && v.compareAt > 0 ? v.compareAt : null,
-        stock: v.stock !== null && v.stock >= 0 ? v.stock : null,
-        images: v.images.map((img) => ({
-          ...img,
-          altAr: img.altAr || draft.nameAr,
-          altEn: img.altEn || draft.nameEn,
-        })),
-      })),
+      // Exactly one sellable size per product. Images now live at product
+      // level, so the size row no longer carries its own gallery.
+      variants: variant
+        ? [
+            {
+              ...variant,
+              compareAt: variant.compareAt !== null && variant.compareAt > 0 ? variant.compareAt : null,
+              stock: variant.stock !== null && variant.stock >= 0 ? variant.stock : null,
+              images: [],
+            },
+          ]
+        : [],
       images: draft.images.map((img) => ({ ...img, altAr: img.altAr || draft.nameAr, altEn: img.altEn || draft.nameEn })),
     };
 
@@ -321,6 +293,16 @@ export function ProductForm({
             value={draft.slug}
             onChange={(e) => set("slug", e.target.value)}
             error={err("slug")}
+          />
+          <TextInput
+            label="الرابط العائلي (family slug)"
+            name="familySlug"
+            dir="ltr"
+            placeholder="extra-virgin-olive-oil"
+            hint="نفس الرابط لكل أحجام الزيت الواحد لتظهر كأحجام بديلة. فارغ = منتج مستقل."
+            value={draft.familySlug ?? ""}
+            onChange={(e) => set("familySlug", e.target.value.trim() || null)}
+            error={err("familySlug")}
           />
           <SelectField
             label="التصنيف"
@@ -412,15 +394,10 @@ export function ProductForm({
         </div>
       </AdminCard>
 
-      {/* variants */}
+      {/* size */}
       <AdminCard
-        title="الأحجام والأسعار"
-        description="كل حجم = SKU مستقل بسعره ومخزونه. استخدم الأسهم لتغيير ترتيب ظهور الأحجام في المتجر — الترتيب هنا هو الترتيب المعروض."
-        action={
-          <MiniButton onClick={() => set("variants", [...draft.variants, newVariant()])}>
-            + حجم
-          </MiniButton>
-        }
+        title="الحجم والسعر"
+        description="كل منتج يمثل حجمًا واحدًا بسعره ومخزونه. لتوفير حجم آخر لنفس الزيت، أنشئ منتجًا جديدًا وضع له نفس الرابط العائلي."
       >
         {err("variants") ? <FormMessage>{err("variants")}</FormMessage> : null}
         <div className="space-y-3">
@@ -532,80 +509,15 @@ export function ProductForm({
                   set("variants", next);
                 }}
               />
-              <div className="flex items-end justify-between gap-2 md:col-span-10">
-                <p className="tnum text-[0.72rem] text-ink-muted">
-                  {formatPrice(v.price)} {v.stock !== null ? `· مخزون ${v.stock}` : "· غير متتبع"}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[0.68rem] text-ink-muted">الترتيب</span>
-                  <MiniButton
-                    onClick={() => moveVariant(i, -1)}
-                    disabled={i === 0}
-                    aria-label="تحريك الحجم لأعلى"
-                  >
-                    ↑
-                  </MiniButton>
-                  <MiniButton
-                    onClick={() => moveVariant(i, 1)}
-                    disabled={i === draft.variants.length - 1}
-                    aria-label="تحريك الحجم لأسفل"
-                  >
-                    ↓
-                  </MiniButton>
-                  <MiniButton
-                    onClick={() =>
-                      set(
-                        "variants",
-                        draft.variants.filter((_, j) => j !== i),
-                      )
-                    }
-                    disabled={draft.variants.length <= 1}
-                    className="text-red-900"
-                  >
-                    حذف الحجم
-                  </MiniButton>
-                </div>
-              </div>
-
-              {/* per-size images */}
-              <div className="md:col-span-12 border-t border-gold/15 pt-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[0.72rem] text-forest">صور هذا الحجم</span>
-                  {v.images.map((img, imageIndex) => (
-                    <span
-                      key={`${img.src}-${imageIndex}`}
-                      className="relative block size-16 overflow-hidden border border-gold/20 bg-ivory"
-                    >
-                      <Image
-                        src={img.src}
-                        alt=""
-                        fill
-                        sizes="64px"
-                        className="object-contain p-1"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeVariantImage(i, imageIndex)}
-                        aria-label="حذف صورة الحجم"
-                        className="absolute end-0 top-0 grid size-5 place-items-center bg-forest/85 text-[0.62rem] text-ivory"
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  <MediaPicker
-                    onSelect={(src) => addVariantImage(i, src)}
-                    triggerLabel="+ صورة"
-                  />
-                </div>
-                <p className="mt-1.5 text-[0.68rem] leading-5 text-ink-muted">
-                  الصورة الأولى تظهر في بطاقة هذا الحجم وصفحة المنتج. بدون صور يستخدم
-                  هذا الحجم صور المنتج.
-                </p>
-              </div>
+              <p className="tnum text-[0.72rem] text-ink-muted md:col-span-12">
+                {formatPrice(v.price)} {v.stock !== null ? `· مخزون ${v.stock}` : "· غير متتبع"}
+              </p>
             </div>
           ))}
         </div>
+        <p className="mt-3 text-[0.72rem] leading-6 text-ink-muted">
+          صور المنتج تُدار من بطاقة «الصور» بالأسفل — الصورة الأولى تظهر في المتجر.
+        </p>
       </AdminCard>
 
       {/* images */}

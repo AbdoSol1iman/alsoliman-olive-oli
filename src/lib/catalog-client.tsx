@@ -50,8 +50,14 @@ export const useCartLines = (): CartLine[] => {
   return useMemo(
     () =>
       items.flatMap((entry) => {
+        // Resolve by variant id, not the stored product id: carts created
+        // before the size split still carry the old product id, but the
+        // variant id is globally unique and always points at its new product.
         const product = products.find(
-          (p) => p.id === entry.productId && p.active && !p.comingSoon,
+          (p) =>
+            p.active &&
+            !p.comingSoon &&
+            p.variants.some((v) => v.id === entry.variantId),
         );
         const variant = product?.variants.find((v) => v.id === entry.variantId);
         if (!product || !variant) return [];
@@ -60,7 +66,7 @@ export const useCartLines = (): CartLine[] => {
         return [{
           ...entry,
           qty,
-          key: `${entry.productId}:${entry.variantId}`,
+          key: `${product.id}:${variant.id}`,
           product,
           variant,
           image: getVariantImage(product, variant),
@@ -78,9 +84,14 @@ export const useCartSubtotal = () =>
 /** Add-to-cart with server-catalog stock clamping. */
 export function useAddToCart() {
   const products = useCatalogProducts();
-  return (productId: string, variantId: string, qty = 1) => {
+  return (_productId: string, variantId: string, qty = 1) => {
+    // Variant-first lookup: the variant id is globally unique, so a stale
+    // product id (e.g. an old link or a pre-split cart) still resolves.
     const product = products.find(
-      (p) => p.id === productId && p.active && !p.comingSoon,
+      (p) =>
+        p.active &&
+        !p.comingSoon &&
+        p.variants.some((v) => v.id === variantId),
     );
     const variant = product?.variants.find((v) => v.id === variantId);
     if (!product || !variant) return;
@@ -88,6 +99,6 @@ export function useAddToCart() {
     const current = state.items.find((i) => i.variantId === variantId)?.qty ?? 0;
     const next = clampQty(current + qty, variant.stock);
     if (next <= 0 || next === current) return;
-    state.add(productId, variantId, next - current);
+    state.add(product.id, variantId, next - current);
   };
 }

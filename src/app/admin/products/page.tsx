@@ -12,9 +12,8 @@ export const instant = false;
 export default async function AdminProductsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  // One catalog read — this page used to fetch the full catalog twice. Keep
-  // the synthetic fallback out so a size image can be shown when the product
-  // itself has no gallery.
+  // One catalog read — this page used to fetch the full catalog twice. Images
+  // live at product level now, so the product gallery is all we need.
   const { products, categories } = await readCatalogData({ fallbackImage: false });
   const categoryName = (id: string | null) =>
     id ? (categories.find((c) => c.id === id)?.nameAr ?? "—") : "—";
@@ -25,8 +24,9 @@ export default async function AdminProductsPage() {
         <div>
           <h1 className="text-[1.7rem] text-forest">المنتجات</h1>
           <p className="mt-1 text-[0.82rem] text-ink-muted">
-            {products.length} منتج في الكتالوج. استخدم الأسهم في عمود «الترتيب» لتغيير ترتيب
-            المنتجات، وأسهم الأحجام داخل صفحة التعديل لتغيير ترتيب الأحجام. كل تعديل يظهر فورًا.
+            {products.length} منتج في الكتالوج — كل منتج حجم واحد. لتوفير حجم آخر لنفس الزيت،
+            أضف منتجًا جديدًا وضع له نفس «الرابط العائلي». استخدم أسهم عمود «الترتيب» لترتيب
+            المنتجات، وكل تعديل يظهر فورًا.
           </p>
         </div>
         <Link
@@ -40,7 +40,7 @@ export default async function AdminProductsPage() {
       {products.length === 0 ? (
         <EmptyState
           title="لا توجد منتجات بعد"
-          body="أضف أول منتج ليظهر في المتجر — الاسم، الأسعار، الأحجام والصور."
+          body="أضف أول منتج ليظهر في المتجر — الاسم، الحجم، السعر والصور."
         />
       ) : (
         <Table>
@@ -48,7 +48,7 @@ export default async function AdminProductsPage() {
             <tr>
               <Th>المنتج</Th>
               <Th>التصنيف</Th>
-              <Th>الأحجام والأسعار</Th>
+              <Th>الحجم والسعر</Th>
               <Th>المخزون</Th>
               <Th>الظهور</Th>
               <Th>الترتيب</Th>
@@ -68,11 +68,7 @@ export default async function AdminProductsPage() {
                     <div className="flex gap-3">
                       <span className="relative block size-14 shrink-0 overflow-hidden bg-cream/60">
                         <Image
-                          src={
-                            p.images[0]?.src ??
-                            p.variants.find((v) => v.images.length > 0)?.images[0].src ??
-                            "/products/bottle-cutout.png"
-                          }
+                          src={p.images[0]?.src ?? "/products/bottle-cutout.png"}
                           alt=""
                           fill
                           sizes="56px"
@@ -82,6 +78,11 @@ export default async function AdminProductsPage() {
                       <div className="min-w-0">
                         <p className="flex flex-wrap items-center gap-2 text-[0.85rem] text-forest">
                           {p.nameAr}
+                          {p.variants[0] ? (
+                            <span className="rounded-full bg-sage/25 px-2 py-0.5 text-[0.62rem] text-forest">
+                              {p.variants[0].sizeLabelAr}
+                            </span>
+                          ) : null}
                           {p.comingSoon ? (
                             <span className="rounded-full bg-gold/25 px-2 py-0.5 text-[0.62rem] text-forest">
                               قريبًا

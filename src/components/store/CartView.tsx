@@ -60,7 +60,7 @@ export function CartView({
           {lines.map((line) => (
             <li key={line.key} className="flex gap-4 py-6 md:gap-6">
               <Link
-                href={`/${locale}/product/${line.product.slug}?size=${line.variant.id}`}
+                href={`/${locale}/product/${line.product.slug}`}
                 className="relative size-24 shrink-0 overflow-hidden bg-cream/60 md:size-32"
               >
                 <Image
@@ -79,7 +79,7 @@ export function CartView({
                       {locale === "ar" ? line.product.categoryAr : line.product.categoryEn}
                     </p>
                     <h2 className="mt-1 text-[1.1rem] leading-snug">
-                      <Link href={`/${locale}/product/${line.product.slug}?size=${line.variant.id}`} className="hover:text-olive">
+                      <Link href={`/${locale}/product/${line.product.slug}`} className="hover:text-olive">
                         {locale === "ar" ? line.product.nameAr : line.product.nameEn}
                       </Link>
                     </h2>

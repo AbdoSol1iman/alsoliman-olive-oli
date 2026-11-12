@@ -29,7 +29,7 @@ export function ProductCard({
   const add = useAddToCart();
   const openCart = useCartStore((s) => s.open);
   const [justAdded, setJustAdded] = useState(false);
-  const href = `/${locale}/product/${product.slug}?size=${variant.id}`;
+  const href = `/${locale}/product/${product.slug}`;
   const comingSoon = product.comingSoon;
   const soldOut = variant.stock !== null && variant.stock <= 0;
   const unavailable = comingSoon || soldOut;

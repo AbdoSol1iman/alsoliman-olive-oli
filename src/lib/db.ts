@@ -92,6 +92,8 @@ const SCHEMA = `
     sort_order INTEGER NOT NULL DEFAULT 0,
     sample INTEGER NOT NULL DEFAULT 0,
     low_stock_threshold INTEGER NOT NULL DEFAULT 5,
+    /** Products that are sizes of the same oil share this family slug. */
+    family_slug TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   );
@@ -380,6 +382,226 @@ const MIGRATIONS: Migration[] = [
       `);
     },
   },
+  {
+    id: "2026-11-12-split-product-sizes",
+    run: async (db) => {
+      // One product per sellable size. A multi-size product is split into one
+      // product per variant; the first variant keeps the original product id
+      // and slug so existing links and campaign references stay valid.
+      const productColumns = await db
+        .prepare("PRAGMA table_info(products)")
+        .all<{ name: string }>();
+      if (!productColumns.some((c) => c.name === "family_slug")) {
+        await db.exec("ALTER TABLE products ADD COLUMN family_slug TEXT");
+      }
+
+      type ProductRow = {
+        id: string;
+        slug: string;
+        family_slug: string | null;
+      };
+      type VariantRow = {
+        id: string;
+        product_id: string;
+        size_en: string;
+        ml: number;
+      };
+      type ImageRow = {
+        src: string;
+        alt_ar: string;
+        alt_en: string;
+      };
+
+      const [productRows, variantRows, imageRows, variantImageRows] = await Promise.all([
+        db
+          .prepare(
+            "SELECT id, slug, family_slug FROM products ORDER BY sort_order, created_at, id",
+          )
+          .all<ProductRow>(),
+        db
+          .prepare(
+            "SELECT id, product_id, size_en, ml FROM product_variants ORDER BY sort_order, ml",
+          )
+          .all<VariantRow>(),
+        db
+          .prepare(
+            "SELECT product_id, src, alt_ar, alt_en FROM product_images ORDER BY sort_order",
+          )
+          .all<ImageRow & { product_id: string }>(),
+        db
+          .prepare(
+            "SELECT variant_id, src, alt_ar, alt_en FROM product_variant_images ORDER BY sort_order",
+          )
+          .all<ImageRow & { variant_id: string }>(),
+      ]);
+
+      const variantsByProduct = new Map<string, VariantRow[]>();
+      for (const variant of variantRows) {
+        const list = variantsByProduct.get(variant.product_id) ?? [];
+        list.push(variant);
+        variantsByProduct.set(variant.product_id, list);
+      }
+      const imagesByProduct = new Map<string, ImageRow[]>();
+      for (const image of imageRows) {
+        const list = imagesByProduct.get(image.product_id) ?? [];
+        list.push(image);
+        imagesByProduct.set(image.product_id, list);
+      }
+      const imagesByVariant = new Map<string, ImageRow[]>();
+      for (const image of variantImageRows) {
+        const list = imagesByVariant.get(image.variant_id) ?? [];
+        list.push(image);
+        imagesByVariant.set(image.variant_id, list);
+      }
+
+      const usedSlugs = new Set(productRows.map((p) => p.slug));
+      const slugify = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      const uniqueSlug = (base: string) => {
+        const trimmed = base.slice(0, 120).replace(/-+$/g, "") || "product";
+        let candidate = trimmed;
+        let n = 2;
+        while (usedSlugs.has(candidate)) {
+          candidate = `${trimmed.slice(0, 116)}-${n++}`;
+        }
+        usedSlugs.add(candidate);
+        return candidate;
+      };
+
+      await db.transaction(async (tx) => {
+        let order = 0;
+
+        const writeImages = async (productId: string, images: ImageRow[]) => {
+          if (!images.length) return;
+          const placeholders = images.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
+          const args = images.flatMap((img, index) => [
+            randomUUID(),
+            productId,
+            img.src,
+            img.alt_ar,
+            img.alt_en,
+            index,
+            index === 0 ? 1 : 0,
+          ]);
+          await tx
+            .prepare(
+              `INSERT INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
+               VALUES ${placeholders}`,
+            )
+            .run(...args);
+        };
+
+        for (const product of productRows) {
+          const variants = variantsByProduct.get(product.id) ?? [];
+          const family = product.family_slug ?? product.slug;
+          await tx
+            .prepare("UPDATE products SET family_slug = ? WHERE id = ?")
+            .run(family, product.id);
+
+          if (!variants.length) {
+            await tx
+              .prepare("UPDATE products SET sort_order = ? WHERE id = ?")
+              .run(order++, product.id);
+            continue;
+          }
+
+          // A product's size gallery and its product gallery become one
+          // gallery for the resulting single-size product. Size images win
+          // because they are the most specific; duplicates are dropped.
+          const productImages = imagesByProduct.get(product.id) ?? [];
+          const mergedImages = (variantId: string): ImageRow[] => {
+            const seen = new Set<string>();
+            const merged: ImageRow[] = [];
+            for (const img of [
+              ...(imagesByVariant.get(variantId) ?? []),
+              ...productImages,
+            ]) {
+              if (seen.has(img.src)) continue;
+              seen.add(img.src);
+              merged.push(img);
+            }
+            return merged;
+          };
+
+          // The first size keeps this product record (and its slug).
+          await tx.prepare("DELETE FROM product_images WHERE product_id = ?").run(product.id);
+          await writeImages(product.id, mergedImages(variants[0].id));
+          await tx
+            .prepare("UPDATE product_variants SET product_id = ?, sort_order = 0 WHERE id = ?")
+            .run(product.id, variants[0].id);
+          await tx
+            .prepare("UPDATE products SET sort_order = ? WHERE id = ?")
+            .run(order++, product.id);
+
+          // Every other size becomes its own product. The INSERT ... SELECT
+          // copies every descriptive field (names, descriptions, specs,
+          // badges, flags, category, timestamps) without listing them here.
+          for (let i = 1; i < variants.length; i += 1) {
+            const variant = variants[i];
+            const newId = randomUUID();
+            const sizePart = slugify(variant.size_en) || `${variant.ml}ml`;
+            const slug = uniqueSlug(`${product.slug}-${sizePart}`);
+            await tx
+              .prepare(
+                `INSERT INTO products (
+                  id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
+                  hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
+                  badge_ar, badge_en, specs, active, featured, coming_soon, sort_order, sample,
+                  low_stock_threshold, family_slug, created_at, updated_at
+                )
+                SELECT ?, ?, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
+                  hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
+                  badge_ar, badge_en, specs, active, featured, coming_soon, ?, sample,
+                  low_stock_threshold, ?, created_at, updated_at
+                FROM products WHERE id = ?`,
+              )
+              .run(newId, slug, order++, family, product.id);
+
+            await tx
+              .prepare("UPDATE product_variants SET product_id = ?, sort_order = 0 WHERE id = ?")
+              .run(newId, variant.id);
+            await writeImages(newId, mergedImages(variant.id));
+          }
+
+          // The size galleries now live at product level.
+          const ids = variants.map((v) => v.id);
+          await tx
+            .prepare(
+              `DELETE FROM product_variant_images
+               WHERE variant_id IN (${ids.map(() => "?").join(", ")})`,
+            )
+            .run(...ids);
+        }
+
+        // Historical order lines and tracking events follow the size to its
+        // new product, so per-product sales and views stay intact.
+        await tx
+          .prepare(
+            `UPDATE order_items
+             SET product_id = (
+               SELECT v.product_id FROM product_variants v
+               WHERE v.id = order_items.variant_id
+             )
+             WHERE variant_id IN (SELECT id FROM product_variants)`,
+          )
+          .run();
+        await tx
+          .prepare(
+            `UPDATE tracking_events
+             SET product_id = (
+               SELECT v.product_id FROM product_variants v
+               WHERE v.id = tracking_events.variant_id
+             )
+             WHERE variant_id IS NOT NULL
+               AND variant_id IN (SELECT id FROM product_variants)`,
+          )
+          .run();
+      });
+    },
+  },
 ];
 
 type Args = readonly unknown[];
@@ -517,70 +739,141 @@ async function seed(db: Db) {
   if (counts.products > 0) return;
 
   // Mirrors the original `src/lib/products.ts` entry exactly — same ids,
-  // slugs, prices and stock — so the storefront looks identical after the move.
-  const productId = "extra-virgin";
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO products (
-        id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
-        hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
-        badge_ar, badge_en, specs, active, featured, sort_order, sample,
-        low_stock_threshold, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 0, 1, 5, ?, ?)`,
-    )
-    .run(
-      productId,
-      "extra-virgin-olive-oil",
-      "olive-oil",
-      "زيت زيتون بكر ممتاز",
-      "Extra Virgin Olive Oil",
-      "العبوة الأساسية لمطبخك",
-      "The everyday kitchen bottle",
-      "زيت زيتون بكر ممتاز، بمذاق متوازن يناسب المائدة والطهي اليومي.",
-      "Extra virgin olive oil with a balanced character for the table and everyday cooking.",
-      JSON.stringify([
-        "زيت زيتون بكر ممتاز، تعتني به آل سليمان من اختيار الزيتون حتى وصوله إلى مائدتك، ليحتفظ بطعمه الأصيل ورائحته الطبيعية.",
-        "مناسب للسلطات والتغميس مع الخبز، وأيضًا للطهي اليومي. عبوة زجاجية داكنة تحمي الزيت من الضوء.",
-      ]),
-      JSON.stringify([
-        "Extra virgin olive oil, cared for by Alsuliman from olive selection to your table, so it keeps its authentic flavour and natural aroma.",
-        "Suited to salads and bread dipping, and to everyday cooking. The dark glass bottle protects the oil from light.",
-      ]),
-      "يُحفظ في مكان جاف بعيدًا عن الضوء والحرارة، ويُغلق بإحكام بعد الاستخدام.",
-      "Store in a dry place away from light and heat, and close tightly after use.",
-      "بكر ممتاز",
-      "Extra virgin",
-      JSON.stringify([]),
-      now,
-      now,
-    );
+  // slugs, prices and stock — but as one product per size. The three sizes
+  // share a family slug so they still cross-link as "other sizes".
+  const family = "extra-virgin-olive-oil";
+  const nameAr = "زيت زيتون بكر ممتاز";
+  const nameEn = "Extra Virgin Olive Oil";
+  const subtitleAr = "العبوة الأساسية لمطبخك";
+  const subtitleEn = "The everyday kitchen bottle";
+  const hookAr = "زيت زيتون بكر ممتاز، بمذاق متوازن يناسب المائدة والطهي اليومي.";
+  const hookEn =
+    "Extra virgin olive oil with a balanced character for the table and everyday cooking.";
+  const descriptionAr = JSON.stringify([
+    "زيت زيتون بكر ممتاز، تعتني به آل سليمان من اختيار الزيتون حتى وصوله إلى مائدتك، ليحتفظ بطعمه الأصيل ورائحته الطبيعية.",
+    "مناسب للسلطات والتغميس مع الخبز، وأيضًا للطهي اليومي. عبوة زجاجية داكنة تحمي الزيت من الضوء.",
+  ]);
+  const descriptionEn = JSON.stringify([
+    "Extra virgin olive oil, cared for by Alsuliman from olive selection to your table, so it keeps its authentic flavour and natural aroma.",
+    "Suited to salads and bread dipping, and to everyday cooking. The dark glass bottle protects the oil from light.",
+  ]);
+  const storageAr = "يُحفظ في مكان جاف بعيدًا عن الضوء والحرارة، ويُغلق بإحكام بعد الاستخدام.";
+  const storageEn = "Store in a dry place away from light and heat, and close tightly after use.";
 
-  const variants: [string, string, string, number, number, number | null, number, string, number][] = [
-    ["ev-500", "٥٠٠ مل", "500 ml", 500, 235, null, 24, "SLM-EV-500", 0],
-    ["ev-750", "٧٥٠ مل", "750 ml", 750, 330, null, 18, "SLM-EV-750", 1],
-    ["ev-1000", "١ لتر", "1 L", 1000, 420, null, 12, "SLM-EV-1000", 2],
+  const sizes: {
+    productId: string;
+    slug: string;
+    variantId: string;
+    sizeAr: string;
+    sizeEn: string;
+    ml: number;
+    price: number;
+    stock: number;
+    sku: string;
+    sortOrder: number;
+  }[] = [
+    {
+      productId: "extra-virgin",
+      slug: "extra-virgin-olive-oil",
+      variantId: "ev-500",
+      sizeAr: "٥٠٠ مل",
+      sizeEn: "500 ml",
+      ml: 500,
+      price: 235,
+      stock: 24,
+      sku: "SLM-EV-500",
+      sortOrder: 0,
+    },
+    {
+      productId: "extra-virgin-750",
+      slug: "extra-virgin-olive-oil-750-ml",
+      variantId: "ev-750",
+      sizeAr: "٧٥٠ مل",
+      sizeEn: "750 ml",
+      ml: 750,
+      price: 330,
+      stock: 18,
+      sku: "SLM-EV-750",
+      sortOrder: 1,
+    },
+    {
+      productId: "extra-virgin-1000",
+      slug: "extra-virgin-olive-oil-1-l",
+      variantId: "ev-1000",
+      sizeAr: "١ لتر",
+      sizeEn: "1 L",
+      ml: 1000,
+      price: 420,
+      stock: 12,
+      sku: "SLM-EV-1000",
+      sortOrder: 2,
+    },
   ];
-  for (const [id, sizeAr, sizeEn, ml, price, compareAt, stock, sku, sortOrder] of variants) {
+
+  for (const size of sizes) {
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO products (
+          id, slug, category_id, name_ar, name_en, subtitle_ar, subtitle_en,
+          hook_ar, hook_en, description_ar, description_en, storage_ar, storage_en,
+          badge_ar, badge_en, specs, active, featured, sort_order, sample,
+          low_stock_threshold, family_slug, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, 5, ?, ?, ?)`,
+      )
+      .run(
+        size.productId,
+        size.slug,
+        "olive-oil",
+        nameAr,
+        nameEn,
+        subtitleAr,
+        subtitleEn,
+        hookAr,
+        hookEn,
+        descriptionAr,
+        descriptionEn,
+        storageAr,
+        storageEn,
+        "بكر ممتاز",
+        "Extra virgin",
+        JSON.stringify([]),
+        size.sortOrder,
+        family,
+        now,
+        now,
+      );
+
     await db
       .prepare(
         `INSERT OR IGNORE INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, sku, sort_order)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, productId, sizeAr, sizeEn, ml, price, compareAt, stock, sku, sortOrder);
-  }
+      .run(
+        size.variantId,
+        size.productId,
+        size.sizeAr,
+        size.sizeEn,
+        size.ml,
+        size.price,
+        null,
+        size.stock,
+        size.sku,
+        0,
+      );
 
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
-       VALUES (?, ?, ?, ?, ?, 0, 1)`,
-    )
-    .run(
-      randomUUID(),
-      productId,
-      "/products/bottle-cutout.png",
-      "عبوة زيت زيتون بكر ممتاز من آل سليمان — زجاجة داكنة",
-      "Alsuliman extra virgin olive oil bottle — dark glass",
-    );
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
+         VALUES (?, ?, ?, ?, ?, 0, 1)`,
+      )
+      .run(
+        randomUUID(),
+        size.productId,
+        "/products/bottle-cutout.png",
+        "عبوة زيت زيتون بكر ممتاز من آل سليمان — زجاجة داكنة",
+        "Alsuliman extra virgin olive oil bottle — dark glass",
+      );
+  }
 }
 
 /**

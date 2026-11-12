@@ -53,6 +53,8 @@ export const productSpecSchema = z.object({
 
 export const productInputSchema = z.object({
   slug: slugSchema,
+  /** Sizes of the same oil share this slug; empty = no related sizes. */
+  familySlug: slugSchema.nullable().default(null),
   categoryId: z.string().trim().max(64).nullable().default(null),
   nameAr: z.string().trim().min(1).max(120),
   nameEn: z.string().trim().min(1).max(120),
@@ -73,7 +75,8 @@ export const productInputSchema = z.object({
   sample: z.boolean().default(false),
   sortOrder: z.coerce.number().int().min(-10_000).max(10_000).default(0),
   lowStockThreshold: z.coerce.number().int().min(0).max(1000).default(5),
-  variants: z.array(productVariantSchema).min(1).max(20),
+  /** Each product is exactly one sellable size. */
+  variants: z.array(productVariantSchema).length(1),
   images: z.array(productImageSchema).max(12).default([]),
 });
 

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { ProductDetail } from "@/components/store/ProductDetail";
 import { ProductCard } from "@/components/store/ProductCard";
-import { getCatalog } from "@/lib/catalog";
+import { findProductSlugByVariant, getCatalog } from "@/lib/catalog";
 import { getSiteDictionary } from "@/lib/content";
 import { buildListingItems, getProduct, type Locale } from "@/lib/products";
 
@@ -24,28 +24,39 @@ export async function generateMetadata({
   if (!product || !product.active) return {};
   const isAr = locale !== "en";
   const name = isAr ? product.nameAr : product.nameEn;
+  const variant = product.variants[0];
+  const sizeLabel = variant ? (isAr ? variant.sizeLabelAr : variant.sizeLabelEn) : "";
+  const title = sizeLabel ? `${name} — ${sizeLabel}` : name;
   return {
-    title: name,
+    title,
     description: isAr ? product.hookAr : product.hookEn,
     alternates: {
       canonical: `/${locale}/product/${slug}`,
       languages: { ar: `/ar/product/${slug}`, en: `/en/product/${slug}` },
     },
     openGraph: {
-      title: name,
+      title,
       description: isAr ? product.hookAr : product.hookEn,
       images: [{ url: product.images[0].src, alt: isAr ? product.images[0].altAr : product.images[0].altEn }],
     },
   };
 }
 
-export default function ProductPage({
+export default async function ProductPage({
   params,
   searchParams,
 }: {
   params: Promise<{ locale: string; slug: string }>;
   searchParams: Promise<{ size?: string }>;
 }) {
+  // Resolve the legacy `?size=` redirect before rendering starts, so old
+  // links and campaign URLs get a real 307 instead of a streamed meta refresh.
+  const [{ locale, slug }, { size }] = await Promise.all([params, searchParams]);
+  if (isLocale(locale) && size) {
+    const owner = await findProductSlugByVariant(size);
+    if (owner && owner !== slug) redirect(`/${locale}/product/${owner}`);
+  }
+
   return (
     <Suspense fallback={<ProductSkeleton />}>
       <ProductBody params={params} searchParams={searchParams} />
@@ -84,27 +95,25 @@ async function ProductBody({
   const { size } = await searchParams;
   const isAr = locale === "ar";
 
-  const currentVariantId = product.variants.find((v) => v.id === size)?.id ?? product.variants[0].id;
-  const related = buildListingItems(products).filter(
-    (item) => item.product.id === product.id && item.variant.id !== currentVariantId,
-  );
+  // Sizes of the same oil are separate products that share a family slug.
+  const related = product.familySlug
+    ? buildListingItems(products).filter(
+        (item) =>
+          item.product.id !== product.id && item.product.familySlug === product.familySlug,
+      )
+    : [];
   const jsonLd = !product.sample
     ? {
         "@context": "https://schema.org",
         "@type": "Product",
         name: isAr ? product.nameAr : product.nameEn,
         description: isAr ? product.hookAr : product.hookEn,
-        image: [
-          ...new Set([
-            ...product.images.map((i) => i.src),
-            ...product.variants.flatMap((v) => (v.images ?? []).map((i) => i.src)),
-          ]),
-        ],
+        image: [...new Set(product.images.map((i) => i.src))],
         brand: { "@type": "Brand", name: "Alsuliman" },
         offers: product.variants.map((v) => ({
           "@type": "Offer",
           sku: v.sku,
-          image: v.images?.[0]?.src ?? product.images[0]?.src,
+          image: product.images[0]?.src,
           priceCurrency: "EGP",
           price: v.price,
           availability:
@@ -189,7 +198,7 @@ async function ProductBody({
         </div>
       </section>
 
-      {related.length > 1 ? (
+      {related.length > 0 ? (
         <section className="paper py-16 md:py-20">
           <div className="container-page">
             <div className="mb-8 flex items-end justify-between">

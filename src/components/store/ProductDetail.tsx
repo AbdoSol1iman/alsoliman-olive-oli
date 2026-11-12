@@ -35,8 +35,8 @@ export function ProductDetail({
   const soldOut = variant.stock !== null && variant.stock <= 0;
   const unavailable = comingSoon || soldOut;
   const name = locale === "ar" ? product.nameAr : product.nameEn;
-  // Each size can own its gallery; sizes without one use the product gallery.
-  // Optional chaining keeps an older cached catalog safe during a deploy.
+  // Images live at product level now. Optional chaining keeps an older
+  // cached catalog safe during a deploy.
   const images = variant.images?.length ? variant.images : product.images;
   const activeImage = images[Math.min(imageIndex, images.length - 1)];
 
@@ -177,39 +177,52 @@ export function ProductDetail({
           </p>
         ) : null}
 
-        <fieldset className="mt-8">
-          <legend className="mb-3 text-[0.7rem] tracking-[0.18em] text-ink-muted">
-            {dict.product.size}
-          </legend>
-          <div className="flex flex-wrap gap-2.5">
-            {product.variants.map((v) => {
-              const disabled = v.stock !== null && v.stock <= 0;
-              const active = v.id === variant.id;
-              return (
-                <button
-                  key={v.id}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    setVariant(v);
-                    setQty(1);
-                    setImageIndex(0);
-                  }}
-                  aria-pressed={active}
-                  className={cx(
-                    "relative h-12 min-w-[5.5rem] border px-4 text-[0.82rem] transition-all duration-300",
-                    active
-                      ? "border-forest bg-forest text-ivory"
-                      : "border-forest/20 text-forest hover:border-forest/60",
-                    disabled && "cursor-not-allowed border-forest/10 text-ink-muted/40 line-through",
-                  )}
-                >
-                  {locale === "ar" ? v.sizeLabelAr : v.sizeLabelEn}
-                </button>
-              );
-            })}
+        {product.variants.length === 1 ? (
+          <div className="mt-8">
+            <p className="text-[0.7rem] tracking-[0.18em] text-ink-muted">
+              {dict.product.size}
+            </p>
+            <p className="mt-2 inline-flex h-12 items-center border border-forest/20 px-4 text-[0.82rem] text-forest">
+              {locale === "ar" ? variant.sizeLabelAr : variant.sizeLabelEn}
+            </p>
           </div>
-        </fieldset>
+        ) : (
+          // Kept for a cached catalog from before the split: a product with
+          // more than one size can still switch between them.
+          <fieldset className="mt-8">
+            <legend className="mb-3 text-[0.7rem] tracking-[0.18em] text-ink-muted">
+              {dict.product.size}
+            </legend>
+            <div className="flex flex-wrap gap-2.5">
+              {product.variants.map((v) => {
+                const disabled = v.stock !== null && v.stock <= 0;
+                const active = v.id === variant.id;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => {
+                      setVariant(v);
+                      setQty(1);
+                      setImageIndex(0);
+                    }}
+                    aria-pressed={active}
+                    className={cx(
+                      "relative h-12 min-w-[5.5rem] border px-4 text-[0.82rem] transition-all duration-300",
+                      active
+                        ? "border-forest bg-forest text-ivory"
+                        : "border-forest/20 text-forest hover:border-forest/60",
+                      disabled && "cursor-not-allowed border-forest/10 text-ink-muted/40 line-through",
+                    )}
+                  >
+                    {locale === "ar" ? v.sizeLabelAr : v.sizeLabelEn}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
 
         <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
           {!comingSoon ? (

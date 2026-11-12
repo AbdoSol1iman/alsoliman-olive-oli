@@ -60,6 +60,11 @@ export type Product = {
   /** true until the owner confirms real pricing for the shop. */
   sample: boolean;
   lowStockThreshold: number;
+  /**
+   * Sizes that belong to the same oil share this slug. Each size is its own
+   * product, so this is what keeps the "other sizes" cross-link working.
+   */
+  familySlug: string | null;
 };
 
 export type Category = {

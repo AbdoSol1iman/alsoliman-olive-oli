@@ -104,7 +104,7 @@ export function CartDrawer({
               {visible.map((line) => (
                 <li key={line.key} className="flex gap-4 py-5">
                   <Link
-                    href={`/${locale}/product/${line.product.slug}?size=${line.variant.id}`}
+                    href={`/${locale}/product/${line.product.slug}`}
                     onClick={close}
                     className="relative size-24 shrink-0 overflow-hidden rounded-xs bg-cream"
                   >

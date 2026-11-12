@@ -108,18 +108,23 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
   }
 
   // Merge duplicate lines for the same variant so the stock check cannot be
-  // bypassed by splitting one quantity across repeated cart lines.
-  const requested = new Map<string, { productId: string; variantId: string; qty: number }>();
+  // bypassed by splitting one quantity across repeated cart lines. Variant ids
+  // are globally unique, so they are the safe key after the size split.
+  const requested = new Map<string, { variantId: string; qty: number }>();
   for (const item of input.items) {
-    const key = `${item.productId}:${item.variantId}`;
-    const current = requested.get(key);
+    const current = requested.get(item.variantId);
     if (current) current.qty += item.qty;
-    else requested.set(key, { productId: item.productId, variantId: item.variantId, qty: item.qty });
+    else requested.set(item.variantId, { variantId: item.variantId, qty: item.qty });
   }
 
   const lines = [...requested.values()].flatMap((item) => {
+    // Variant-first lookup: stale product ids from pre-split carts still
+    // resolve to the product that now owns this size.
     const product = products.find(
-      (p) => p.id === item.productId && p.active && !p.comingSoon,
+      (p) =>
+        p.active &&
+        !p.comingSoon &&
+        p.variants.some((v) => v.id === item.variantId),
     );
     const variant = product?.variants.find((v) => v.id === item.variantId);
     if (!product || !variant) return [];
