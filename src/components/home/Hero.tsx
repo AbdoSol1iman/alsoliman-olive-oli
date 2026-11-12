@@ -98,7 +98,7 @@ export function Hero({
             <div className="absolute inset-x-[9%] top-[6%] bottom-0 rounded-t-[999px] bg-gradient-to-b from-cream/90 via-cream/60 to-transparent" />
             <div
               aria-hidden
-              className="absolute inset-x-[13%] top-[10%] bottom-6 rounded-t-[999px] border border-gold/30"
+              className="absolute inset-x-[13%] top-[10%] bottom-6 z-10 rounded-t-[999px] border border-gold/30"
             />
             <div
               aria-hidden
@@ -106,23 +106,23 @@ export function Hero({
               style={{ background: "radial-gradient(ellipse at 50% 45%, rgba(210,175,106,0.35), transparent 62%)" }}
             />
 
-            <div className="absolute inset-0 flex items-end justify-center pb-[2%]">
-              {image ? (
-                <div className="relative h-[90%] w-full">
-                  <Image
-                    src={heroImage}
-                    alt={
-                      locale === "ar"
-                        ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
-                        : "Alsuliman extra virgin olive oil bottle"
-                    }
-                    fill
-                    priority
-                    sizes="(max-width: 1024px) 60vw, 32vw"
-                    className="object-contain object-bottom drop-shadow-[0_28px_36px_rgba(38,49,31,0.28)]"
-                  />
-                </div>
-              ) : (
+            {image ? (
+              <div className="absolute inset-x-[9%] top-[6%] bottom-0 overflow-hidden rounded-t-[999px]">
+                <Image
+                  src={heroImage}
+                  alt={
+                    locale === "ar"
+                      ? "زجاجة زيت زيتون بكر ممتاز من آل سليمان"
+                      : "Alsuliman extra virgin olive oil bottle"
+                  }
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 60vw, 32vw"
+                  className="object-cover"
+                />
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-end justify-center pb-[2%]">
                 <Image
                   src={heroImage}
                   alt={
@@ -140,8 +140,8 @@ export function Hero({
                     WebkitMaskImage: "linear-gradient(to bottom, #000 93%, transparent 100%)",
                   }}
                 />
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="absolute bottom-[16%] end-[2%] hidden sm:block">
               <Seal locale={locale} className="shadow-soft" />

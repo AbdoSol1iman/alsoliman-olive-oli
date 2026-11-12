@@ -136,7 +136,7 @@ export function StorySection({
           <div className="gilded relative mx-auto aspect-[4/5] w-full max-w-sm overflow-hidden bg-ivory-deep">
             <div
               aria-hidden
-              className="absolute inset-x-[15%] top-[8%] bottom-0 rounded-t-[999px] border border-gold/30"
+              className="absolute inset-x-[15%] top-[8%] bottom-0 z-10 rounded-t-[999px] border border-gold/30"
             />
             <Image
               src={image || DEFAULT_BOTTLE}
@@ -147,11 +147,19 @@ export function StorySection({
               }
               fill
               sizes="(max-width: 1024px) 80vw, 38vw"
-              className="object-contain object-bottom p-[14%] pb-[2%] drop-shadow-[0_20px_30px_rgba(38,49,31,0.25)]"
-              style={{
-                maskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-                WebkitMaskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-              }}
+              className={
+                image
+                  ? "object-cover"
+                  : "object-contain object-bottom p-[14%] pb-[2%] drop-shadow-[0_20px_30px_rgba(38,49,31,0.25)]"
+              }
+              style={
+                image
+                  ? undefined
+                  : {
+                      maskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
+                      WebkitMaskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
+                    }
+              }
             />
           </div>
           <div className="absolute -bottom-6 start-0 hidden bg-forest-deep px-6 py-4 md:block">
@@ -195,11 +203,19 @@ export function WhySection({
                 }
                 fill
                 sizes="(max-width: 1024px) 70vw, 30vw"
-                className="object-contain object-bottom p-[16%] pb-[4%] drop-shadow-[0_18px_26px_rgba(38,49,31,0.22)]"
-                style={{
-                  maskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-                  WebkitMaskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-                }}
+                className={
+                  image
+                    ? "object-cover"
+                    : "object-contain object-bottom p-[16%] pb-[4%] drop-shadow-[0_18px_26px_rgba(38,49,31,0.22)]"
+                }
+                style={
+                  image
+                    ? undefined
+                    : {
+                        maskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
+                        WebkitMaskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
+                      }
+                }
               />
             </div>
             <div className="absolute -bottom-4 -start-4 bg-ivory px-4 py-3 shadow-soft">

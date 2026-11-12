@@ -122,7 +122,7 @@ export function MediaPicker({
         >
           {current ? (
             <span className="relative block size-10 overflow-hidden bg-ivory">
-              <Image src={current} alt="" fill sizes="40px" className="object-contain p-1" />
+              <Image src={current} alt="" fill sizes="40px" className="object-cover" />
             </span>
           ) : null}
           <span>{current ? "تغيير الصورة" : triggerLabel}</span>
@@ -236,7 +236,7 @@ export function MediaPicker({
                       <button
                         type="button"
                         onClick={() => pick(item.path)}
-                        className="group w-full border border-gold/20 bg-cream/30 p-1.5 text-start transition-colors hover:border-forest"
+                        className="group w-full border border-gold/20 bg-cream/30 text-start transition-colors hover:border-forest"
                       >
                         <span className="relative block aspect-square w-full overflow-hidden bg-ivory">
                           <Image
@@ -244,7 +244,7 @@ export function MediaPicker({
                             alt={item.altAr || item.originalName}
                             fill
                             sizes="120px"
-                            className="object-contain p-1.5"
+                            className="object-cover"
                           />
                         </span>
                         <span className="mt-1 block truncate text-[0.62rem] text-ink-muted" dir="ltr">

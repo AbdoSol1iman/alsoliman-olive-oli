@@ -186,7 +186,7 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
                 alt=""
                 fill
                 sizes="96px"
-                className="object-contain p-1.5"
+                className="object-cover"
               />
             </span>
             <div className="grid min-w-56 flex-1 gap-3 sm:grid-cols-3">
@@ -256,7 +256,7 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
                   alt={item.altAr || item.originalName}
                   fill
                   sizes="(max-width: 640px) 45vw, 200px"
-                  className="object-contain p-2"
+                  className="object-cover"
                 />
               </span>
               <p className="mt-1.5 truncate text-[0.68rem] text-forest" title={item.originalName} dir="ltr">
