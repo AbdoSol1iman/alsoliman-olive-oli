@@ -266,11 +266,15 @@ export function CheckoutForm({
 
       <form onSubmit={onSubmit} noValidate className="grid gap-10 lg:grid-cols-[1.5fr_1fr] lg:gap-16">
         <div className="space-y-8">
-          {/* Honeypot: off-screen, not focusable and hidden from assistive
-              tech. Only bots filling every field will touch it. */}
+          {/* Honeypot: hidden, not focusable and hidden from assistive tech.
+              Only bots filling every field will touch it. It must not use a
+              negative offset: `-left-[9999px]` added ~10,000px of scrollable
+              overflow, which expanded the layout viewport on RTL mobile
+              browsers and pushed the whole checkout page off-screen. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -left-[9999px] top-auto h-px w-px overflow-hidden"
+            className="pointer-events-none absolute start-0 top-0 h-px w-px overflow-hidden opacity-0"
+            style={{ clipPath: "inset(50%)" }}
           >
             <label htmlFor="website">Website</label>
             <input

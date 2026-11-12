@@ -27,6 +27,14 @@ export async function generateMetadata({
   const variant = product.variants[0];
   const sizeLabel = variant ? (isAr ? variant.sizeLabelAr : variant.sizeLabelEn) : "";
   const title = sizeLabel ? `${name} — ${sizeLabel}` : name;
+  const firstImage = product.images[0];
+  // Uploaded media is stored as WebP, which Facebook/WhatsApp do not render in
+  // link previews. `/api/og/...` serves the same image as JPEG for crawlers.
+  const imageSrc = firstImage?.src ?? "/products/bottle-card.jpg";
+  const ogImage =
+    imageSrc.startsWith("/api/media/") && imageSrc.endsWith(".webp")
+      ? imageSrc.replace("/api/media/", "/api/og/")
+      : imageSrc;
   return {
     title,
     description: isAr ? product.hookAr : product.hookEn,
@@ -37,7 +45,12 @@ export async function generateMetadata({
     openGraph: {
       title,
       description: isAr ? product.hookAr : product.hookEn,
-      images: [{ url: product.images[0].src, alt: isAr ? product.images[0].altAr : product.images[0].altEn }],
+      images: [
+        {
+          url: ogImage,
+          alt: firstImage ? (isAr ? firstImage.altAr : firstImage.altEn) : name,
+        },
+      ],
     },
   };
 }
