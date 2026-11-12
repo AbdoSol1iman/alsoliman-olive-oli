@@ -6,7 +6,7 @@ import { getSettingsAdmin } from "@/lib/settings";
 import { formatDate, formatPrice } from "@/lib/format";
 import { connection } from "next/server";
 import { PrintButton } from "@/components/admin/PrintButton";
-import { STATUS_LABELS } from "@/components/admin/ui";
+import { STATUS_LABELS } from "@/lib/order-status";
 
 export const instant = false;
 

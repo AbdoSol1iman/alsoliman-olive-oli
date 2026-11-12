@@ -9,7 +9,8 @@ import {
   setOrderStatusAction,
 } from "@/app/actions/orders-admin";
 import type { OrderStatus } from "@/lib/orders";
-import { humanError, MiniButton, STATUS_LABELS, STATUS_ORDER } from "./ui";
+import { humanError, MiniButton } from "./ui";
+import { STATUS_LABELS, STATUS_ORDER } from "@/lib/order-status";
 
 export function OrderStatusForm({ reference, status }: { reference: string; status: OrderStatus }) {
   const [pending, startTransition] = useTransition();

@@ -237,23 +237,8 @@ export const humanError = (code: string) => errorText[code] ?? code;
 /* Order status                                                        */
 /* ------------------------------------------------------------------ */
 
-export const STATUS_LABELS: Record<OrderStatus, string> = {
-  pending: "بانتظار التأكيد",
-  confirmed: "تم التأكيد",
-  processing: "قيد التجهيز",
-  shipped: "في الطريق",
-  delivered: "تم التوصيل",
-  cancelled: "ملغي",
-};
-
-export const STATUS_ORDER: OrderStatus[] = [
-  "pending",
-  "confirmed",
-  "processing",
-  "shipped",
-  "delivered",
-  "cancelled",
-];
+// Labels live in a server-safe module so server pages can import them too.
+import { STATUS_LABELS, STATUS_ORDER } from "@/lib/order-status";
 
 const statusTone: Record<OrderStatus, string> = {
   pending: "border-gold/50 bg-gold/15 text-forest",

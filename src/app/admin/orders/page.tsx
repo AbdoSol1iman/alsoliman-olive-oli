@@ -3,7 +3,8 @@ import { requireAdmin } from "@/lib/auth";
 import { countOrders, listOrders, ORDER_STATUSES } from "@/lib/orders";
 import { formatDate, formatPrice } from "@/lib/format";
 import { connection } from "next/server";
-import { EmptyState, STATUS_LABELS, StatusBadge, Table, Td, Th } from "@/components/admin/ui";
+import { EmptyState, StatusBadge, Table, Td, Th } from "@/components/admin/ui";
+import { STATUS_LABELS } from "@/lib/order-status";
 import { OrderDeleteButton } from "@/components/admin/OrderPanels";
 
 export const instant = false;

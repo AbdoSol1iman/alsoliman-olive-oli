@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { getOrderByReference, getOrderNotes } from "@/lib/orders";
+import { getOrderByReference, getOrderNotes, getOrderStatusHistory } from "@/lib/orders";
 import { getSettingsAdmin } from "@/lib/settings";
 import { formatDate, formatPrice } from "@/lib/format";
 import { connection } from "next/server";
 import { AdminCard, StatusBadge } from "@/components/admin/ui";
+import { STATUS_LABELS } from "@/lib/order-status";
 import { OrderDeleteButton, OrderNotes, OrderStatusForm } from "@/components/admin/OrderPanels";
 
 export const instant = false;
@@ -27,6 +28,7 @@ export default async function AdminOrderPage({
     getOrderNotes(order.id),
     getSettingsAdmin(),
   ]);
+  const history = await getOrderStatusHistory(order.id);
   const zone = settings.shipping.zones[order.governorate];
   const waHref = `https://wa.me/${order.phone.replace(/\D/g, "")}`;
 
@@ -122,8 +124,39 @@ export default async function AdminOrderPage({
         </ul>
       </AdminCard>
 
+      <AdminCard
+        title="سجل الحالة"
+        description="كل تغيير حالة يُسجَّل باسم من قام به. لا يتأكد الطلب تلقائيًا من فتح واتساب — التأكيد إجراء يدوي من هنا فقط."
+      >
+        {history.length === 0 ? (
+          <p className="text-[0.8rem] text-ink-muted">لا يوجد سجل بعد.</p>
+        ) : (
+          <ul className="divide-y divide-gold/12">
+            {history.map((event) => (
+              <li
+                key={event.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-[0.8rem]"
+              >
+                <span className="text-forest">
+                  {STATUS_LABELS[event.status] ?? event.status}
+                </span>
+                <span className="text-ink-muted">
+                  {formatDate(event.changed_at)} ·{" "}
+                  {event.source === "admin"
+                    ? event.changed_by || "مدير"
+                    : "النظام — إنشاء الطلب"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminCard>
+
       <div className="grid gap-5 md:grid-cols-2">
-        <AdminCard title="تحديث الحالة" description="التغيير يظهر للعميل في صفحة تتبع الطلب.">
+        <AdminCard
+          title="تحديث الحالة"
+          description="التأكيد يدوي بالكامل: فتح واتساب لا يؤكد الطلب. التغيير يظهر للعميل في صفحة تتبع الطلب."
+        >
           <OrderStatusForm reference={order.reference} status={order.status} />
         </AdminCard>
         <AdminCard title="الملاحظات الداخلية">

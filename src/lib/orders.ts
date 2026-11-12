@@ -172,6 +172,8 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
 
     // `OR IGNORE` keeps the UNIQUE idempotency key safe when two concurrent
     // requests both pass the check above: exactly one INSERT wins.
+    // The status is always `pending`: opening WhatsApp is not proof that the
+    // customer sent anything, so only the owner can confirm an order later.
     const inserted = await tx
       .prepare(
         `INSERT OR IGNORE INTO orders (id, reference, created_at, status, customer_name, phone, governorate, city, address, notes, payment_method, subtotal, shipping, total, idempotency_key, updated_at)
@@ -622,11 +624,23 @@ export async function deleteOrderNote(noteId: string): Promise<void> {
   await db.prepare("DELETE FROM order_notes WHERE id = ?").run(noteId);
 }
 
+/**
+ * Change an order's status.
+ *
+ * Confirmation is deliberately manual: the WhatsApp hand-off only opens a chat,
+ * so an order stays `pending` until an authenticated admin moves it forward
+ * here. The admin identity is mandatory — status history must always name the
+ * person who confirmed, never a silent `system` actor.
+ */
 export async function updateOrderStatus(
   reference: string,
   status: OrderStatus,
-  changedBy = "",
+  changedBy: string,
 ): Promise<void> {
+  const actor = changedBy.trim();
+  if (!actor) {
+    throw new Error("updateOrderStatus requires an authenticated admin identity");
+  }
   const db = await getDb();
   const now = new Date().toISOString();
   await db.transaction(async (tx) => {
@@ -637,7 +651,7 @@ export async function updateOrderStatus(
     await tx
       .prepare("UPDATE orders SET status = ?, updated_at = ? WHERE id = ?")
       .run(status, now, order.id);
-    await recordOrderStatus(tx, order.id, status, now, changedBy, changedBy ? "admin" : "system");
+    await recordOrderStatus(tx, order.id, status, now, actor, "admin");
   });
 }
 
