@@ -25,11 +25,18 @@ export function MediaPicker({
   onSelect,
   current,
   triggerLabel = "اختر صورة",
+  onClear,
 }: {
   onSelect: (path: string) => void;
   /** Currently selected image path (shows its thumbnail on the trigger). */
   current?: string;
   triggerLabel?: string;
+  /**
+   * Optional: show a delete button that unsets the image. Only pass this where
+   * an empty value is meaningful (homepage sections fall back to a default).
+   * The file stays in the media library — other sections may still use it.
+   */
+  onClear?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -105,20 +112,31 @@ export function MediaPicker({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={openPicker}
-        className={cx(
-          "flex items-center gap-3 border border-forest/20 bg-cream/30 px-3 py-2 text-[0.78rem] text-forest transition-colors hover:border-forest/50",
-        )}
-      >
-        {current ? (
-          <span className="relative block size-10 overflow-hidden bg-ivory">
-            <Image src={current} alt="" fill sizes="40px" className="object-contain p-1" />
-          </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={openPicker}
+          className={cx(
+            "flex items-center gap-3 border border-forest/20 bg-cream/30 px-3 py-2 text-[0.78rem] text-forest transition-colors hover:border-forest/50",
+          )}
+        >
+          {current ? (
+            <span className="relative block size-10 overflow-hidden bg-ivory">
+              <Image src={current} alt="" fill sizes="40px" className="object-contain p-1" />
+            </span>
+          ) : null}
+          <span>{current ? "تغيير الصورة" : triggerLabel}</span>
+        </button>
+        {current && onClear ? (
+          <MiniButton
+            onClick={onClear}
+            aria-label="حذف الصورة من هذا القسم"
+            className="border-red-900/30 text-red-900 hover:border-red-900 hover:bg-red-900 hover:text-ivory"
+          >
+            حذف الصورة
+          </MiniButton>
         ) : null}
-        <span>{current ? "تغيير الصورة" : triggerLabel}</span>
-      </button>
+      </div>
 
       {open
         ? createPortal(

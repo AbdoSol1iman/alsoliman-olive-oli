@@ -105,7 +105,17 @@ function Fields({
       return (
         <div>
           <span className="mb-1.5 block text-[0.75rem] text-forest">{labelFor(key)}</span>
-          <MediaPicker current={value || undefined} onSelect={(p) => onChange(path, p)} triggerLabel="اختر صورة" />
+          <MediaPicker
+            current={value || undefined}
+            onSelect={(p) => onChange(path, p)}
+            triggerLabel="اختر صورة"
+            onClear={() => onChange(path, "")}
+          />
+          {!value && key.endsWith("Image") ? (
+            <p className="mt-1.5 text-[0.68rem] text-ink-muted">
+              بدون صورة مخصّصة — يظهر الشكل الافتراضي للقسم.
+            </p>
+          ) : null}
         </div>
       );
     }
