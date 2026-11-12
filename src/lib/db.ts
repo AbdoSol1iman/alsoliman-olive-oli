@@ -440,8 +440,12 @@ async function migrate(db: Db) {
   await db.exec(SCHEMA);
 
   // Lightweight, idempotent column additions for databases created before
-  // the dashboard existed.
-  const orderColumns = await db.prepare("PRAGMA table_info(orders)").all<{ name: string }>();
+  // the dashboard existed. The two reads are independent — run them together
+  // so a cold serverless start pays one round trip fewer.
+  const [orderColumns, appliedRows] = await Promise.all([
+    db.prepare("PRAGMA table_info(orders)").all<{ name: string }>(),
+    db.prepare("SELECT id FROM schema_migrations").all<{ id: string }>(),
+  ]);
   const hasColumn = (name: string) => orderColumns.some((c) => c.name === name);
   if (!hasColumn("updated_at")) {
     await db.exec("ALTER TABLE orders ADD COLUMN updated_at TEXT");
@@ -449,9 +453,7 @@ async function migrate(db: Db) {
 
   // Versioned schema upgrades. Each migration is applied once per database;
   // every statement itself is also idempotent so a crash mid-run is safe.
-  const applied = new Set(
-    (await db.prepare("SELECT id FROM schema_migrations").all<{ id: string }>()).map((r) => r.id),
-  );
+  const applied = new Set(appliedRows.map((r) => r.id));
   for (const migration of MIGRATIONS) {
     if (applied.has(migration.id)) continue;
     await migration.run(db);
@@ -464,9 +466,16 @@ async function migrate(db: Db) {
 /** First-run seed: move the original code catalog into the database. */
 async function seed(db: Db) {
   const now = new Date().toISOString();
-  const categoryCount = (await db.prepare("SELECT COUNT(*) AS n FROM categories").get<{ n: number }>())!;
+  // One round trip instead of two separate COUNT queries on every cold start.
+  const counts = (await db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM categories) AS categories,
+         (SELECT COUNT(*) FROM products) AS products`,
+    )
+    .get<{ categories: number; products: number }>())!;
 
-  if (categoryCount.n === 0) {
+  if (counts.categories === 0) {
     await db
       .prepare(
         `INSERT OR IGNORE INTO categories (id, slug, name_ar, name_en, sort_order, active, created_at)
@@ -475,8 +484,7 @@ async function seed(db: Db) {
       .run("olive-oil", "olive-oil", "زيت زيتون", "Olive oil", 0, now);
   }
 
-  const productCount = (await db.prepare("SELECT COUNT(*) AS n FROM products").get<{ n: number }>())!;
-  if (productCount.n > 0) return;
+  if (counts.products > 0) return;
 
   // Mirrors the original `src/lib/products.ts` entry exactly — same ids,
   // slugs, prices and stock — so the storefront looks identical after the move.

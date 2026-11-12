@@ -21,10 +21,12 @@ export default async function AdminInvoicePage({
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
   const { reference } = await params;
-  const result = await getOrderByReference(reference);
+  const [result, settings] = await Promise.all([
+    getOrderByReference(reference),
+    getSettingsAdmin(),
+  ]);
   if (!result) notFound();
   const { order, items } = result;
-  const settings = await getSettingsAdmin();
   const zone = settings.shipping.zones[order.governorate];
 
   return (

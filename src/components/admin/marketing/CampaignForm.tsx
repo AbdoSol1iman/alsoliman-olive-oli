@@ -43,7 +43,6 @@ export function CampaignForm({
         } else {
           form.reset();
         }
-        router.refresh();
       } else {
         setError(
           result.error === "utm_taken"

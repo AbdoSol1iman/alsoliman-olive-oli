@@ -249,7 +249,6 @@ export function ProductForm({
         return;
       }
       router.push("/admin/products");
-      router.refresh();
     });
   };
 

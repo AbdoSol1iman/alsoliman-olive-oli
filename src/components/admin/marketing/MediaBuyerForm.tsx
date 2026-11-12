@@ -34,7 +34,6 @@ export function MediaBuyerForm({ buyer }: { buyer?: MediaBuyer }) {
         } else {
           form.reset();
         }
-        router.refresh();
       } else {
         setError(humanError(result.error));
       }

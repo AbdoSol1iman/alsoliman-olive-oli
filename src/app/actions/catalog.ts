@@ -7,8 +7,8 @@ import {
   createProduct,
   deleteCategory,
   deleteProduct,
-  listProductsAdmin,
   moveProduct,
+  productSlugExists,
   setProductFlags,
   updateCategory,
   updateProduct,
@@ -39,8 +39,7 @@ export async function saveProductAction(
   }
 
   const data = parsed.data;
-  const duplicate = (await listProductsAdmin()).find((p) => p.slug === data.slug && p.id !== productId);
-  if (duplicate) return fail("slug_taken");
+  if (await productSlugExists(data.slug, productId)) return fail("slug_taken");
 
   try {
     const id = productId ?? (await createProduct(data));

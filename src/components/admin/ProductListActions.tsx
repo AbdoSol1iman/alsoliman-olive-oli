@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import {
   deleteProductAction,
   moveProductAction,
@@ -20,31 +19,42 @@ export function ProductFlags({
   featured: boolean;
   comingSoon: boolean;
 }) {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
+
+  // Toggle state flips immediately; React reverts it automatically if the
+  // action fails, so the switch never waits on the remote database round trip.
+  const [optimistic, setOptimistic] = useOptimistic(
+    { active, featured, comingSoon },
+    (state, change: { flag: "active" | "featured" | "comingSoon"; value: boolean }) => ({
+      ...state,
+      [change.flag]: change.value,
+    }),
+  );
 
   const set = (flag: "active" | "featured" | "comingSoon", value: boolean) => {
     setError("");
     startTransition(async () => {
+      setOptimistic({ flag, value });
+      // The action revalidates `/admin/products`, so Next includes the fresh
+      // route in the action response — no second `router.refresh()` needed.
       const result = await toggleProductFlagAction(id, flag, value);
       if (!result.ok) setError(humanError(result.error));
-      else router.refresh();
     });
   };
 
   return (
     <div className="flex flex-col gap-2.5">
       <label className="flex items-center gap-2 text-[0.72rem] text-ink-muted">
-        <Toggle label="إظهار في المتجر" checked={active} onChange={(v) => set("active", v)} disabled={pending} />
-        {active ? "ظاهر" : "مخفي"}
+        <Toggle label="إظهار في المتجر" checked={optimistic.active} onChange={(v) => set("active", v)} disabled={pending} />
+        {optimistic.active ? "ظاهر" : "مخفي"}
       </label>
       <label className="flex items-center gap-2 text-[0.72rem] text-ink-muted">
-        <Toggle label="مميز في الرئيسية" checked={featured} onChange={(v) => set("featured", v)} disabled={pending} />
+        <Toggle label="مميز في الرئيسية" checked={optimistic.featured} onChange={(v) => set("featured", v)} disabled={pending} />
         مميز
       </label>
       <label className="flex items-center gap-2 text-[0.72rem] text-ink-muted">
-        <Toggle label="قريبًا" checked={comingSoon} onChange={(v) => set("comingSoon", v)} disabled={pending} />
+        <Toggle label="قريبًا" checked={optimistic.comingSoon} onChange={(v) => set("comingSoon", v)} disabled={pending} />
         قريبًا
       </label>
       {error ? <p className="text-[0.68rem] text-red-800">{error}</p> : null}
@@ -63,7 +73,6 @@ export function ProductRowActions({
   canUp: boolean;
   canDown: boolean;
 }) {
-  const router = useRouter();
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -72,7 +81,6 @@ export function ProductRowActions({
     startTransition(async () => {
       const result = await moveProductAction(id, direction);
       if (!result.ok) setError(humanError(result.error));
-      else router.refresh();
     });
   };
 
@@ -82,7 +90,6 @@ export function ProductRowActions({
     startTransition(async () => {
       const result = await deleteProductAction(id);
       if (!result.ok) setError(humanError(result.error));
-      else router.refresh();
     });
   };
 

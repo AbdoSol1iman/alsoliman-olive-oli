@@ -312,15 +312,22 @@ async function confirmedOrderHref(reference: string, locale: Locale): Promise<st
 
 export async function getOrderByReference(reference: string) {
   const db = await getDb();
-  const order = await db
-    .prepare("SELECT * FROM orders WHERE reference = ?")
-    .get<OrderRecord>(reference.toUpperCase());
+  const ref = reference.toUpperCase();
+  // Both reads are keyed by the reference, so they can run together instead
+  // of paying two serial remote-database round trips.
+  const [order, items] = await Promise.all([
+    db.prepare("SELECT * FROM orders WHERE reference = ?").get<OrderRecord>(ref),
+    db
+      .prepare(
+        `SELECT oi.product_id, oi.variant_id, oi.name_ar, oi.name_en,
+                oi.size_ar, oi.size_en, oi.unit_price, oi.unit_cost, oi.qty
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE o.reference = ?`,
+      )
+      .all<OrderItem>(ref),
+  ]);
   if (!order) return null;
-  const items = await db
-    .prepare(
-      "SELECT product_id, variant_id, name_ar, name_en, size_ar, size_en, unit_price, unit_cost, qty FROM order_items WHERE order_id = ?",
-    )
-    .all<OrderItem>(order.id);
   return { order, items };
 }
 
@@ -428,76 +435,90 @@ export type DashboardStats = {
 
 export async function orderStats(): Promise<DashboardStats> {
   const db = await getDb();
-
-  const totals = (await db
-    .prepare(
-      `SELECT
-         COUNT(*) AS orders,
-         COALESCE(SUM(total), 0) AS revenue,
-         COALESCE(AVG(total), 0) AS avg_order
-       FROM orders`,
-    )
-    .get<{ orders: number; revenue: number; avg_order: number }>())!;
-
-  const byStatus = await db
-    .prepare("SELECT status, COUNT(*) AS n FROM orders GROUP BY status")
-    .all<{ status: string; n: number }>();
-  const statusCount = (s: string) => byStatus.find((r) => r.status === s)?.n ?? 0;
-
-  const { products } = await readCatalogData();
-  const lowStock = products
-    .filter((p) => p.active)
-    .flatMap((p) =>
-      p.variants
-        .filter((v) => v.stock !== null && v.stock <= p.lowStockThreshold)
-        .map((v) => ({
-          product: p.nameAr,
-          variant: v.sizeLabelAr,
-          sku: v.sku,
-          stock: v.stock as number,
-          threshold: p.lowStockThreshold,
-        })),
-    )
-    .sort((a, b) => a.stock - b.stock);
-
-  const recentOrders = await listOrders({ limit: 8 });
-
-  const bestRows = await db
-    .prepare(
-      `SELECT oi.product_id, oi.variant_id,
-              MAX(oi.name_ar) AS name_ar, MAX(oi.size_ar) AS size_ar,
-              SUM(oi.qty) AS qty, SUM(oi.qty * oi.unit_price) AS revenue
-       FROM order_items oi
-       JOIN orders o ON o.id = oi.order_id
-       WHERE o.status != 'cancelled'
-       GROUP BY oi.product_id, oi.variant_id
-       ORDER BY qty DESC
-       LIMIT 6`,
-    )
-    .all<{
-      product_id: string;
-      variant_id: string;
-      name_ar: string;
-      size_ar: string;
-      qty: number;
-      revenue: number;
-    }>();
-
   const now = new Date();
-  const dayKey = (iso: string) => iso.slice(0, 10);
 
-  // Daily: last 14 days (only days with orders are returned by SQL; we fill gaps).
-  const dailyRows = await db
-    .prepare(
-      `SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS orders, SUM(total) AS revenue
-       FROM orders WHERE created_at >= ? GROUP BY day ORDER BY day`,
-    )
-    .all<{
-      day: string;
-      orders: number;
-      revenue: number;
-    }>(new Date(now.getTime() - 13 * 864e5).toISOString());
-  const dailyMap = new Map(dailyRows.map((r) => [dayKey(r.day), r]));
+  // Every read below is independent. Issuing them together means a remote
+  // Turso database pays one parallel batch instead of a serial round trip per
+  // query — that waterfall was what made the dashboard take ~2 seconds.
+  const [
+    statusRows,
+    productCount,
+    lowStock,
+    recentOrders,
+    bestRows,
+    dailyRows,
+    monthlyRows,
+  ] = await Promise.all([
+    db
+      .prepare(
+        `SELECT status, COUNT(*) AS n, COALESCE(SUM(total), 0) AS revenue
+         FROM orders GROUP BY status`,
+      )
+      .all<{ status: string; n: number; revenue: number }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM products WHERE active = 1").get<{ n: number }>(),
+    // Stock alerts computed in SQL instead of loading the whole catalog.
+    db
+      .prepare(
+        `SELECT p.name_ar AS product, v.size_ar AS variant, v.sku AS sku,
+                v.stock AS stock, p.low_stock_threshold AS threshold
+         FROM product_variants v
+         JOIN products p ON p.id = v.product_id
+         WHERE p.active = 1 AND v.stock IS NOT NULL AND v.stock <= p.low_stock_threshold
+         ORDER BY v.stock`,
+      )
+      .all<{
+        product: string;
+        variant: string;
+        sku: string;
+        stock: number;
+        threshold: number;
+      }>(),
+    listOrders({ limit: 8 }),
+    db
+      .prepare(
+        `SELECT oi.product_id, oi.variant_id,
+                MAX(oi.name_ar) AS name_ar, MAX(oi.size_ar) AS size_ar,
+                SUM(oi.qty) AS qty, SUM(oi.qty * oi.unit_price) AS revenue
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE o.status != 'cancelled'
+         GROUP BY oi.product_id, oi.variant_id
+         ORDER BY qty DESC
+         LIMIT 6`,
+      )
+      .all<{
+        product_id: string;
+        variant_id: string;
+        name_ar: string;
+        size_ar: string;
+        qty: number;
+        revenue: number;
+      }>(),
+    // 55 days covers both the 14-day chart and the 8 weekly buckets.
+    db
+      .prepare(
+        `SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS orders, SUM(total) AS revenue
+         FROM orders WHERE created_at >= ? GROUP BY day ORDER BY day`,
+      )
+      .all<{ day: string; orders: number; revenue: number }>(
+        new Date(now.getTime() - 55 * 864e5).toISOString(),
+      ),
+    db
+      .prepare(
+        `SELECT substr(created_at, 1, 7) AS month, SUM(total) AS revenue, COUNT(*) AS orders
+         FROM orders WHERE created_at >= ? GROUP BY month ORDER BY month`,
+      )
+      .all<{ month: string; revenue: number; orders: number }>(
+        new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString(),
+      ),
+  ]);
+
+  const orders = statusRows.reduce((sum, row) => sum + row.n, 0);
+  const revenue = statusRows.reduce((sum, row) => sum + row.revenue, 0);
+  const statusCount = (s: string) => statusRows.find((r) => r.status === s)?.n ?? 0;
+
+  // Daily: last 14 days (SQL returns only days with orders; fill the gaps).
+  const dailyMap = new Map(dailyRows.map((r) => [r.day, r]));
   const daily: SalesPoint[] = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(now.getTime() - (13 - i) * 864e5);
     const key = d.toISOString().slice(0, 10);
@@ -510,19 +531,9 @@ export async function orderStats(): Promise<DashboardStats> {
     };
   });
 
-  // Weekly: last 8 ISO-ish weeks (Mon-start).
-  const weeklyRows = await db
-    .prepare(
-      `SELECT substr(created_at, 1, 10) AS day, SUM(total) AS revenue, COUNT(*) AS orders
-       FROM orders WHERE created_at >= ? GROUP BY day`,
-    )
-    .all<{
-      day: string;
-      revenue: number;
-      orders: number;
-    }>(new Date(now.getTime() - 55 * 864e5).toISOString());
+  // Weekly: last 8 ISO-ish weeks (Mon-start), derived from the same daily rows.
   const weeklyBuckets = new Map<string, { revenue: number; orders: number }>();
-  for (const row of weeklyRows) {
+  for (const row of dailyRows) {
     const d = new Date(row.day);
     const offset = (d.getUTCDay() + 6) % 7; // Monday = 0
     const monday = new Date(d.getTime() - offset * 864e5);
@@ -545,14 +556,6 @@ export async function orderStats(): Promise<DashboardStats> {
   });
 
   // Monthly: last 6 months.
-  const monthlyRows = await db
-    .prepare(
-      `SELECT substr(created_at, 1, 7) AS month, SUM(total) AS revenue, COUNT(*) AS orders
-       FROM orders WHERE created_at >= ? GROUP BY month ORDER BY month`,
-    )
-    .all<{ month: string; revenue: number; orders: number }>(
-      new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString(),
-    );
   const monthlyMap = new Map(monthlyRows.map((r) => [r.month, r]));
   const monthNames = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
   const monthly: SalesPoint[] = Array.from({ length: 6 }, (_, i) => {
@@ -568,14 +571,14 @@ export async function orderStats(): Promise<DashboardStats> {
   });
 
   return {
-    revenue: totals.revenue,
-    orders: totals.orders,
+    revenue,
+    orders,
     pending: statusCount("pending"),
     processing: statusCount("processing") + statusCount("confirmed"),
     delivered: statusCount("delivered"),
     cancelled: statusCount("cancelled"),
-    averageOrder: totals.orders > 0 ? Math.round(totals.avg_order) : 0,
-    products: products.filter((p) => p.active).length,
+    averageOrder: orders > 0 ? Math.round(revenue / orders) : 0,
+    products: productCount?.n ?? 0,
     lowStock,
     recentOrders,
     bestSellers: bestRows.map((r) => ({

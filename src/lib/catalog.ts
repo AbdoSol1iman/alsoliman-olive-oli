@@ -146,30 +146,28 @@ export async function readCatalogData(options: { fallbackImage?: boolean } = {})
   const fallbackImage = options.fallbackImage ?? true;
   const db = await getDb();
 
-  const categoryRows = await db
-    .prepare("SELECT * FROM categories ORDER BY sort_order, name_ar")
-    .all<{
+  // Four queries, not 4×N: the remote database is over HTTP, so per-product
+  // round-trips would make every storefront render needlessly slow. All four
+  // reads are independent, so they go out together instead of a waterfall.
+  const [categoryRows, productRows, variantRows, imageRows] = await Promise.all([
+    db.prepare("SELECT * FROM categories ORDER BY sort_order, name_ar").all<{
       id: string;
       slug: string;
       name_ar: string;
       name_en: string;
       sort_order: number;
       active: number;
-    }>();
-
-  const categoryNames = new Map(
-    categoryRows.map((c) => [c.id, { ar: c.name_ar, en: c.name_en }]),
-  );
-
-  // Two queries, not 2×N: the remote database is over HTTP, so per-product
-  // round-trips would make every storefront render needlessly slow.
-  const [productRows, variantRows, imageRows] = await Promise.all([
+    }>(),
     db.prepare("SELECT * FROM products ORDER BY sort_order, created_at").all<ProductRow>(),
     db
       .prepare("SELECT * FROM product_variants ORDER BY sort_order, ml")
       .all<VariantRow>(),
     db.prepare("SELECT * FROM product_images ORDER BY sort_order").all<ImageRow>(),
   ]);
+
+  const categoryNames = new Map(
+    categoryRows.map((c) => [c.id, { ar: c.name_ar, en: c.name_en }]),
+  );
 
   const variantsByProduct = new Map<string, VariantRow[]>();
   for (const variant of variantRows) {
@@ -246,7 +244,45 @@ export async function getProductBySlugAdmin(slug: string): Promise<Product | nul
   return products.find((p) => p.slug === slug) ?? null;
 }
 
-export const listCategoriesAdmin = async () => (await readCatalogData()).categories;
+/**
+ * Duplicate-slug check for the editor. A dedicated `LIMIT 1` lookup instead of
+ * loading the whole catalog (products + variants + images) just to inspect one
+ * field.
+ */
+export async function productSlugExists(slug: string, excludeId?: string | null): Promise<boolean> {
+  const db = await getDb();
+  const row = excludeId
+    ? await db
+        .prepare("SELECT 1 AS found FROM products WHERE slug = ? AND id != ? LIMIT 1")
+        .get<{ found: number }>(slug, excludeId)
+    : await db
+        .prepare("SELECT 1 AS found FROM products WHERE slug = ? LIMIT 1")
+        .get<{ found: number }>(slug);
+  return Boolean(row);
+}
+
+/** Categories only — avoids loading the entire product catalog just for names. */
+export async function listCategoriesAdmin(): Promise<Category[]> {
+  const db = await getDb();
+  const rows = await db
+    .prepare("SELECT * FROM categories ORDER BY sort_order, name_ar")
+    .all<{
+      id: string;
+      slug: string;
+      name_ar: string;
+      name_en: string;
+      sort_order: number;
+      active: number;
+    }>();
+  return rows.map((c) => ({
+    id: c.id,
+    slug: c.slug,
+    nameAr: c.name_ar,
+    nameEn: c.name_en,
+    sortOrder: c.sort_order,
+    active: c.active === 1,
+  }));
+}
 
 /* ------------------------------------------------------------------ */
 /* Mutations — every one refreshes the storefront cache                 */
@@ -261,44 +297,53 @@ function invalidateCatalog() {
 
 async function writeVariants(tx: Db, productId: string, variants: ProductInput["variants"]) {
   await tx.prepare("DELETE FROM product_variants WHERE product_id = ?").run(productId);
-  const stmt = tx.prepare(
-    `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, cost, sku, sort_order)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  );
-  for (const [index, v] of variants.entries()) {
-    await stmt.run(
-      v.id || `${productId}-v${index + 1}`,
-      productId,
-      v.sizeLabelAr,
-      v.sizeLabelEn,
-      v.ml,
-      v.price,
-      v.compareAt,
-      v.stock,
-      v.cost,
-      v.sku,
-      index,
-    );
-  }
+  if (!variants.length) return;
+
+  // One multi-row INSERT instead of one round trip per variant — saves a
+  // remote-database request per size in every product save.
+  const placeholders = variants.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+  const args = variants.flatMap((v, index) => [
+    v.id || `${productId}-v${index + 1}`,
+    productId,
+    v.sizeLabelAr,
+    v.sizeLabelEn,
+    v.ml,
+    v.price,
+    v.compareAt,
+    v.stock,
+    v.cost,
+    v.sku,
+    index,
+  ]);
+  await tx
+    .prepare(
+      `INSERT INTO product_variants (id, product_id, size_ar, size_en, ml, price, compare_at, stock, cost, sku, sort_order)
+       VALUES ${placeholders}`,
+    )
+    .run(...args);
 }
 
 async function writeImages(tx: Db, productId: string, images: ProductInput["images"]) {
   await tx.prepare("DELETE FROM product_images WHERE product_id = ?").run(productId);
-  const stmt = tx.prepare(
-    `INSERT INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  );
-  for (const [index, img] of images.entries()) {
-    await stmt.run(
-      randomUUID(),
-      productId,
-      img.src,
-      img.altAr,
-      img.altEn,
-      index,
-      img.isPrimary || (index === 0 && !images.some((i) => i.isPrimary)) ? 1 : 0,
-    );
-  }
+  if (!images.length) return;
+
+  const hasPrimary = images.some((i) => i.isPrimary);
+  const placeholders = images.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
+  const args = images.flatMap((img, index) => [
+    randomUUID(),
+    productId,
+    img.src,
+    img.altAr,
+    img.altEn,
+    index,
+    img.isPrimary || (index === 0 && !hasPrimary) ? 1 : 0,
+  ]);
+  await tx
+    .prepare(
+      `INSERT INTO product_images (id, product_id, src, alt_ar, alt_en, sort_order, is_primary)
+       VALUES ${placeholders}`,
+    )
+    .run(...args);
 }
 
 export async function createProduct(input: ProductInput): Promise<string> {

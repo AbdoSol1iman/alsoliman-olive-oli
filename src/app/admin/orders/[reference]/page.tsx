@@ -23,8 +23,10 @@ export default async function AdminOrderPage({
   const result = await getOrderByReference(reference);
   if (!result) notFound();
   const { order, items } = result;
-  const notes = await getOrderNotes(order.id);
-  const settings = await getSettingsAdmin();
+  const [notes, settings] = await Promise.all([
+    getOrderNotes(order.id),
+    getSettingsAdmin(),
+  ]);
   const zone = settings.shipping.zones[order.governorate];
   const waHref = `https://wa.me/${order.phone.replace(/\D/g, "")}`;
 

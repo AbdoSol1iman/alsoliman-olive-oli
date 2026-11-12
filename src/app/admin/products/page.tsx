@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
-import { listProductsAdmin, listCategoriesAdmin } from "@/lib/catalog";
+import { readCatalogData } from "@/lib/catalog";
 import { formatPrice } from "@/lib/format";
 import { connection } from "next/server";
 import { ProductFlags, ProductRowActions } from "@/components/admin/ProductListActions";
@@ -12,8 +12,8 @@ export const instant = false;
 export default async function AdminProductsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const products = await listProductsAdmin();
-  const categories = await listCategoriesAdmin();
+  // One catalog read — this page used to fetch the full catalog twice.
+  const { products, categories } = await readCatalogData();
   const categoryName = (id: string | null) =>
     id ? (categories.find((c) => c.id === id)?.nameAr ?? "—") : "—";
 

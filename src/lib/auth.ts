@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_COOKIE, SESSION_MAX_AGE, issueToken, verifyToken } from "./session-token";
@@ -58,7 +59,7 @@ export async function clearSession() {
  * token version (database). A password change bumps the version, instantly
  * invalidating every outstanding session.
  */
-export async function getSession(): Promise<Session | null> {
+export const getSession = cache(async (): Promise<Session | null> => {
   await ensureSeedAdmin();
   const store = await cookies();
   const payload = verifyToken(store.get(ADMIN_COOKIE)?.value);
@@ -67,7 +68,7 @@ export async function getSession(): Promise<Session | null> {
   if (!user) return null;
   if (user.token_version !== payload.tv) return null;
   return { id: user.id, email: user.email, name: user.name, role: user.role };
-}
+});
 
 /** Server-side gate for every admin page and action. */
 export async function requireAdmin(): Promise<Session> {

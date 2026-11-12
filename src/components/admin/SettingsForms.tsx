@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { saveSettingsAction } from "@/app/actions/settings";
 import type { Settings, ShippingZone } from "@/lib/settings";
 import { MediaPicker } from "./MediaPicker";
@@ -59,7 +58,6 @@ export function SettingsForm<K extends SectionKey>({
   initial: Settings[K];
   children: (draft: Settings[K], set: (patch: Partial<Settings[K]>) => void) => ReactNode;
 }) {
-  const router = useRouter();
   const [draft, setDraft] = useState<Settings[K]>(() => structuredClone(initial));
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
@@ -75,7 +73,6 @@ export function SettingsForm<K extends SectionKey>({
           ? { ok: true, text: "تم الحفظ — التغيير ظاهر في المتجر فورًا." }
           : { ok: false, text: humanError(result.error) },
       );
-      if (result.ok) router.refresh();
     });
   };
 

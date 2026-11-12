@@ -1,11 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteCampaignAction } from "@/app/actions/marketing";
 
 export function DeleteCampaignButton({ id, name }: { id: string; name: string }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
@@ -20,10 +18,10 @@ export function DeleteCampaignButton({ id, name }: { id: string; name: string })
     }
     setError("");
     startTransition(async () => {
+      // The action revalidates the marketing layout, so the fresh list is
+      // already included in the response.
       const result = await deleteCampaignAction(id);
-      if (result.ok) {
-        router.refresh();
-      } else {
+      if (!result.ok) {
         setError(
           result.error === "campaign_in_use"
             ? "لا يمكن حذف حملة لها مصاريف أو طلبات منسوبة. غيّر حالتها إلى «منتهية»."

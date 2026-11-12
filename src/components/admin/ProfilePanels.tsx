@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import {
   changePasswordAction,
   createAdminAction,
@@ -30,7 +29,6 @@ const Field = ({
 );
 
 export function ProfileForm({ initial }: { initial: { name: string; email: string } }) {
-  const router = useRouter();
   const [name, setName] = useState(initial.name);
   const [email, setEmail] = useState(initial.email);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -46,7 +44,6 @@ export function ProfileForm({ initial }: { initial: { name: string; email: strin
           ? { ok: true, text: "تم تحديث بياناتك ✓" }
           : { ok: false, text: humanError(result.error) },
       );
-      if (result.ok) router.refresh();
     });
   };
 
@@ -189,7 +186,6 @@ export function AdminUsersManager({
   currentId: string;
   isOwner: boolean;
 }) {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
@@ -228,7 +224,6 @@ export function AdminUsersManager({
         setName("");
         setPassword("");
         setAsOwner(false);
-        router.refresh();
       }
     });
   };
@@ -241,7 +236,6 @@ export function AdminUsersManager({
       setMessage(
         result.ok ? { ok: true, text: "تم حذف الحساب." } : { ok: false, text: humanError(result.error) },
       );
-      if (result.ok) router.refresh();
     });
   };
 
@@ -256,7 +250,6 @@ export function AdminUsersManager({
       if (result.ok) {
         setResetId(null);
         setResetPassword("");
-        router.refresh();
       }
     });
   };

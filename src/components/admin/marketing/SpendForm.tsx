@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { saveAdSpendAction } from "@/app/actions/marketing";
 import {
@@ -17,7 +16,6 @@ export function SpendForm({
   campaigns: Campaign[];
   defaultDate: string;
 }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -34,7 +32,6 @@ export function SpendForm({
       if (result.ok) {
         setSuccess("تم حفظ بيانات المصاريف. نفس (الحملة + التاريخ + المصدر) تُحدّث السجل الموجود.");
         form.reset();
-        router.refresh();
       } else {
         setError(
           result.error === "future_date"

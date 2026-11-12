@@ -138,9 +138,14 @@ async function readSettings(): Promise<Settings> {
   const defaults = defaultSettings();
 
   // First run: materialise the full default snapshot so the settings screen
-  // always has something concrete to edit.
-  const count = (await db.prepare("SELECT COUNT(*) AS n FROM settings").get<{ n: number }>())!;
-  if (count.n === 0) {
+  // always has something concrete to edit. The row read doubles as the
+  // emptiness check — a separate COUNT(*) was an extra remote round trip on
+  // every read (checkout re-prices on every order).
+  let rows = await db.prepare("SELECT key, value FROM settings").all<{
+    key: string;
+    value: string;
+  }>();
+  if (rows.length === 0) {
     const stmt = db.prepare(
       "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
     );
@@ -148,12 +153,11 @@ async function readSettings(): Promise<Settings> {
     for (const [key, value] of Object.entries(defaults)) {
       await stmt.run(key, JSON.stringify(value), now);
     }
+    rows = await db.prepare("SELECT key, value FROM settings").all<{
+      key: string;
+      value: string;
+    }>();
   }
-
-  const rows = await db.prepare("SELECT key, value FROM settings").all<{
-    key: string;
-    value: string;
-  }>();
   let settings = defaults;
   for (const row of rows) {
     if (!(row.key in defaults)) continue;

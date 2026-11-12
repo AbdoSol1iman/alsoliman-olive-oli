@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { deleteMediaAction, uploadMediaAction, updateMediaMetaAction } from "@/app/actions/media";
 import { MEDIA_CATEGORIES, type MediaItem } from "@/lib/media-shared";
 import { cx } from "@/lib/format";
@@ -19,7 +18,6 @@ const fmtSize = (bytes: number) =>
   bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} ميجا` : `${Math.max(1, Math.round(bytes / 1024))} كيلو`;
 
 export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
-  const router = useRouter();
   const [items, setItems] = useState(initial);
   const [filter, setFilter] = useState("");
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -98,7 +96,6 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
       if (result.ok) {
         setEditing(null);
         await reload(filter);
-        router.refresh();
       }
     });
   };

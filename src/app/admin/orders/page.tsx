@@ -27,8 +27,10 @@ export default async function AdminOrdersPage({
   const query = { status, q, from, to };
   const pageSize = 25;
   const currentPage = Math.max(1, Number(page) || 1);
-  const total = await countOrders(query);
-  const orders = await listOrders({ ...query, limit: pageSize, offset: (currentPage - 1) * pageSize });
+  const [total, orders] = await Promise.all([
+    countOrders(query),
+    listOrders({ ...query, limit: pageSize, offset: (currentPage - 1) * pageSize }),
+  ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const qs = (next: Record<string, string>) => {

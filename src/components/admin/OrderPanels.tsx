@@ -12,7 +12,6 @@ import type { OrderStatus } from "@/lib/orders";
 import { humanError, MiniButton, STATUS_LABELS, STATUS_ORDER } from "./ui";
 
 export function OrderStatusForm({ reference, status }: { reference: string; status: OrderStatus }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -23,10 +22,7 @@ export function OrderStatusForm({ reference, status }: { reference: string; stat
     startTransition(async () => {
       const result = await setOrderStatusAction(formData);
       if (!result.ok) setError(humanError(result.error));
-      else {
-        setDone(true);
-        router.refresh();
-      }
+      else setDone(true);
     });
   };
 

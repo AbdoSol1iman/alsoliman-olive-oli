@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import type { Category } from "@/lib/products";
 import { categoryInputSchema } from "@/lib/admin-schemas";
 import { saveCategoryAction, deleteCategoryAction } from "@/app/actions/catalog";
@@ -23,7 +22,6 @@ type Draft = { slug: string; nameAr: string; nameEn: string; sortOrder: number; 
 const emptyDraft: Draft = { slug: "", nameAr: "", nameEn: "", sortOrder: 0, active: true };
 
 export function CategoryManager({ categories }: { categories: Category[] }) {
-  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -70,7 +68,6 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
       if (result.ok) {
         setEditingId(null);
         setDraft(null);
-        router.refresh();
       }
     });
   };
@@ -83,7 +80,6 @@ export function CategoryManager({ categories }: { categories: Category[] }) {
       setMessage(
         result.ok ? { ok: true, text: "تم حذف التصنيف." } : { ok: false, text: humanError(result.error) },
       );
-      if (result.ok) router.refresh();
     });
   };
 

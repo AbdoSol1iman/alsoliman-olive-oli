@@ -136,10 +136,28 @@ export async function countAdminUsers() {
  * First-run bootstrap: if the table is empty, create the initial account from
  * the environment (or well-known dev credentials outside production). This is
  * the only moment env credentials are ever used.
+ *
+ * Memoised per process (and shared across HMR reloads): this used to run a
+ * `COUNT(*)` on every authenticated request, adding a full remote-database
+ * round trip to every admin page. The last owner can never be deleted, so once
+ * the check succeeds it stays valid for the life of the process.
  */
-export async function ensureSeedAdmin() {
-  if ((await countAdminUsers()) > 0) return;
-  const email = (process.env.ADMIN_EMAIL ?? "admin@alsuliman.local").trim();
-  const password = process.env.ADMIN_PASSWORD ?? "alsuliman-dev";
-  await createAdminUser({ email, password, name: "المالك", role: "owner" });
+const globalForAdminSeed = globalThis as unknown as {
+  __alsulimanAdminSeed?: Promise<void>;
+};
+
+export function ensureSeedAdmin(): Promise<void> {
+  if (!globalForAdminSeed.__alsulimanAdminSeed) {
+    globalForAdminSeed.__alsulimanAdminSeed = (async () => {
+      if ((await countAdminUsers()) > 0) return;
+      const email = (process.env.ADMIN_EMAIL ?? "admin@alsuliman.local").trim();
+      const password = process.env.ADMIN_PASSWORD ?? "alsuliman-dev";
+      await createAdminUser({ email, password, name: "المالك", role: "owner" });
+    })().catch((error) => {
+      // Do not cache a failed bootstrap — the next request retries.
+      globalForAdminSeed.__alsulimanAdminSeed = undefined;
+      throw error;
+    });
+  }
+  return globalForAdminSeed.__alsulimanAdminSeed;
 }

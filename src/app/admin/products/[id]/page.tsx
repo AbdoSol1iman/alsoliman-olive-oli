@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
-import { getProductForEdit, listCategoriesAdmin } from "@/lib/catalog";
+import { readCatalogData } from "@/lib/catalog";
 import { ProductForm } from "@/components/admin/ProductForm";
 import { connection } from "next/server";
 
@@ -17,9 +17,10 @@ export default async function EditProductPage({
   await connection();
   await requireAdmin();
   const { id } = await params;
-  const product = await getProductForEdit(id);
+  // One catalog read supplies both the product and the category list.
+  const { products, categories } = await readCatalogData({ fallbackImage: false });
+  const product = products.find((p) => p.id === id);
   if (!product) notFound();
-  const categories = await listCategoriesAdmin();
 
   return (
     <div className="space-y-5">

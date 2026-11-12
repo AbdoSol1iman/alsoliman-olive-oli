@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { saveContentAction } from "@/app/actions/settings";
 import { MediaPicker } from "./MediaPicker";
 import { FormMessage, MiniButton, humanError, inputClass, textareaClass, Toggle } from "./ui";
@@ -243,7 +242,6 @@ export type EditorSection = {
  * storefront immediately (no redeploy).
  */
 export function ContentSections({ sections }: { sections: EditorSection[] }) {
-  const router = useRouter();
   const [activeKey, setActiveKey] = useState(sections[0]?.key ?? "");
   const active = sections.find((s) => s.key === activeKey) ?? sections[0];
 
@@ -271,7 +269,6 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
           ? { ok: true, text: "تم الحفظ — التغيير ظاهر في الموقع فورًا." }
           : { ok: false, text: humanError(result.error) },
       );
-      if (result.ok) router.refresh();
     });
   };
 
