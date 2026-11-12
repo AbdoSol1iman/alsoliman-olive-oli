@@ -11,6 +11,31 @@ import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary, OfferItem } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
+/** Allocates an offer bundle total proportionally across its component lines. */
+function allocateBundlePrices<T extends { unitPrice: number; qty: number }>(
+  items: T[],
+  targetTotal: number,
+): (T & { unitPrice: number })[] {
+  const originalTotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
+  if (originalTotal <= 0 || targetTotal <= 0 || targetTotal === originalTotal) {
+    return items;
+  }
+
+  let runningSum = 0;
+  return items.map((item, idx) => {
+    if (idx === items.length - 1) {
+      // Last item absorbs any rounding remainder so the sum matches 100%
+      const remainingTotal = targetTotal - runningSum;
+      const unit = Math.max(0, Math.round(remainingTotal / item.qty));
+      return { ...item, unitPrice: unit };
+    }
+    const itemShare = ((item.unitPrice * item.qty) / originalTotal) * targetTotal;
+    const unit = Math.max(0, Math.round(itemShare / item.qty));
+    runningSum += unit * item.qty;
+    return { ...item, unitPrice: unit };
+  });
+}
+
 export function OfferCard({
   offer,
   locale,
@@ -179,7 +204,8 @@ export function OfferCard({
       const targetVariantId = selectedDropdownOption.id;
       const prod = products.find((p) => p.variants.some((v) => v.id === targetVariantId));
       if (!prod) return;
-      add(prod.id, targetVariantId, 1);
+      const customPrice = offer.price && Number(offer.price) > 0 ? Number(offer.price) : undefined;
+      add(prod.id, targetVariantId, 1, customPrice, offer.title || undefined);
       trackEvent("AddToCart", {
         productId: prod.id,
         variantId: targetVariantId,
@@ -191,11 +217,12 @@ export function OfferCard({
       return;
     }
 
-    // Case B: Combined bundle (all combined products added together)
+    // Case B: Combined bundle (all combined products added together at offer price)
     if (hasCombined) {
       if (combinedItems.some((i) => i.disabled)) return;
-      for (const item of combinedItems) {
-        add(item.productId, item.variantId, item.qty);
+      const allocatedItems = allocateBundlePrices(combinedItems, effectivePrice);
+      for (const item of allocatedItems) {
+        add(item.productId, item.variantId, item.qty, item.unitPrice, offer.title || undefined);
         trackEvent("AddToCart", {
           productId: item.productId,
           variantId: item.variantId,
@@ -214,7 +241,8 @@ export function OfferCard({
       const targetVariantId = selectedDropdownOption.id;
       const prod = products.find((p) => p.variants.some((v) => v.id === targetVariantId));
       if (!prod) return;
-      add(prod.id, targetVariantId, 1);
+      const customPrice = offer.price && Number(offer.price) > 0 ? Number(offer.price) : undefined;
+      add(prod.id, targetVariantId, 1, customPrice, offer.title || undefined);
       openCart();
       setJustAdded(true);
       window.setTimeout(() => setJustAdded(false), 1800);

@@ -31,8 +31,10 @@ export type CartLine = CartEntry & {
   variant: Variant;
   /** This size's own image, or the product gallery fallback. */
   image: ProductImage;
+  unitPrice: number;
   lineTotal: number;
   maxQty: number | null;
+  offerTitle?: string;
 };
 
 const clampQty = (qty: number, stock: number | null) => {
@@ -63,16 +65,27 @@ export const useCartLines = (): CartLine[] => {
         if (!product || !variant) return [];
         const qty = clampQty(entry.qty, variant.stock);
         if (qty === 0) return [];
-        return [{
-          ...entry,
-          qty,
-          key: `${product.id}:${variant.id}`,
-          product,
-          variant,
-          image: getVariantImage(product, variant),
-          lineTotal: variant.price * qty,
-          maxQty: variant.stock,
-        }];
+        const price =
+          typeof entry.unitPrice === "number" && entry.unitPrice >= 0
+            ? entry.unitPrice
+            : variant.price;
+        const lineKey =
+          entry.key ||
+          `${product.id}:${variant.id}${entry.unitPrice !== undefined ? `:${entry.unitPrice}` : ""}`;
+        return [
+          {
+            ...entry,
+            qty,
+            key: lineKey,
+            product,
+            variant,
+            unitPrice: price,
+            image: getVariantImage(product, variant),
+            lineTotal: price * qty,
+            maxQty: variant.stock,
+            offerTitle: entry.offerTitle,
+          },
+        ];
       }),
     [items, products],
   );
@@ -84,7 +97,13 @@ export const useCartSubtotal = () =>
 /** Add-to-cart with server-catalog stock clamping. */
 export function useAddToCart() {
   const products = useCatalogProducts();
-  return (_productId: string, variantId: string, qty = 1) => {
+  return (
+    _productId: string,
+    variantId: string,
+    qty = 1,
+    unitPrice?: number,
+    offerTitle?: string,
+  ) => {
     // Variant-first lookup: the variant id is globally unique, so a stale
     // product id (e.g. an old link or a pre-split cart) still resolves.
     const product = products.find(
@@ -96,9 +115,18 @@ export function useAddToCart() {
     const variant = product?.variants.find((v) => v.id === variantId);
     if (!product || !variant) return;
     const state = useCartStore.getState();
-    const current = state.items.find((i) => i.variantId === variantId)?.qty ?? 0;
+    const itemKey =
+      unitPrice !== undefined ? `${variantId}:${unitPrice}` : variantId;
+    const current =
+      state.items.find(
+        (i) =>
+          (i.key ||
+            (i.unitPrice !== undefined
+              ? `${i.variantId}:${i.unitPrice}`
+              : i.variantId)) === itemKey,
+      )?.qty ?? 0;
     const next = clampQty(current + qty, variant.stock);
     if (next <= 0 || next === current) return;
-    state.add(product.id, variantId, next - current);
+    state.add(product.id, variantId, next - current, unitPrice, offerTitle);
   };
 }

@@ -4,17 +4,26 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type CartEntry = {
+  key?: string;
   productId: string;
   variantId: string;
   qty: number;
+  unitPrice?: number;
+  offerTitle?: string;
 };
 
 type CartState = {
   items: CartEntry[];
   isOpen: boolean;
-  add: (productId: string, variantId: string, qty?: number) => void;
-  remove: (variantId: string) => void;
-  setQty: (variantId: string, qty: number) => void;
+  add: (
+    productId: string,
+    variantId: string,
+    qty?: number,
+    unitPrice?: number,
+    offerTitle?: string,
+  ) => void;
+  remove: (keyOrVariantId: string) => void;
+  setQty: (keyOrVariantId: string, qty: number) => void;
   clear: () => void;
   open: () => void;
   close: () => void;
@@ -22,34 +31,72 @@ type CartState = {
 };
 
 /**
- * The cart holds only ids + quantities. Product lookups (prices, stock caps)
- * resolve against the catalog provided by `CatalogProvider`, so the client
- * bundle never embeds the product database.
+ * The cart holds item ids, quantities, and optional offer price overrides.
  */
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
       isOpen: false,
-      add: (productId, variantId, qty = 1) => {
-        const existing = get().items.find((i) => i.variantId === variantId);
+      add: (productId, variantId, qty = 1, unitPrice?: number, offerTitle?: string) => {
+        const itemKey =
+          unitPrice !== undefined ? `${variantId}:${unitPrice}` : variantId;
+        const existing = get().items.find(
+          (i) =>
+            (i.key ||
+              (i.unitPrice !== undefined
+                ? `${i.variantId}:${i.unitPrice}`
+                : i.variantId)) === itemKey,
+        );
         const nextQty = (existing?.qty ?? 0) + qty;
         if (nextQty <= 0) return;
         set({
           items: existing
-            ? get().items.map((i) => (i.variantId === variantId ? { ...i, qty: nextQty } : i))
-            : [...get().items, { productId, variantId, qty: nextQty }],
+            ? get().items.map((i) =>
+                (i.key ||
+                  (i.unitPrice !== undefined
+                    ? `${i.variantId}:${i.unitPrice}`
+                    : i.variantId)) === itemKey
+                  ? { ...i, qty: nextQty }
+                  : i,
+              )
+            : [
+                ...get().items,
+                {
+                  key: itemKey,
+                  productId,
+                  variantId,
+                  qty: nextQty,
+                  unitPrice,
+                  offerTitle,
+                },
+              ],
           isOpen: true,
         });
       },
-      remove: (variantId) =>
-        set({ items: get().items.filter((i) => i.variantId !== variantId) }),
-      setQty: (variantId, qty) => {
+      remove: (keyOrVariantId) =>
+        set({
+          items: get().items.filter(
+            (i) =>
+              i.key !== keyOrVariantId &&
+              i.variantId !== keyOrVariantId &&
+              `${i.variantId}:${i.unitPrice}` !== keyOrVariantId,
+          ),
+        }),
+      setQty: (keyOrVariantId, qty) => {
         if (qty <= 0) {
-          set({ items: get().items.filter((i) => i.variantId !== variantId) });
+          get().remove(keyOrVariantId);
           return;
         }
-        set({ items: get().items.map((i) => (i.variantId === variantId ? { ...i, qty } : i)) });
+        set({
+          items: get().items.map((i) =>
+            i.key === keyOrVariantId ||
+            i.variantId === keyOrVariantId ||
+            `${i.variantId}:${i.unitPrice}` === keyOrVariantId
+              ? { ...i, qty }
+              : i,
+          ),
+        });
       },
       clear: () => set({ items: [] }),
       open: () => set({ isOpen: true }),

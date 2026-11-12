@@ -107,14 +107,28 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     return { ok: false, code: "invalid_zone" };
   }
 
-  // Merge duplicate lines for the same variant so the stock check cannot be
-  // bypassed by splitting one quantity across repeated cart lines. Variant ids
-  // are globally unique, so they are the safe key after the size split.
-  const requested = new Map<string, { variantId: string; qty: number }>();
+  // Merge duplicate lines for the same variant + unitPrice so repeated lines combine.
+  const requested = new Map<
+    string,
+    { variantId: string; qty: number; unitPrice?: number; offerTitle?: string }
+  >();
   for (const item of input.items) {
-    const current = requested.get(item.variantId);
+    const key =
+      item.unitPrice !== undefined
+        ? `${item.variantId}:${item.unitPrice}`
+        : item.variantId;
+    const current = requested.get(key);
     if (current) current.qty += item.qty;
-    else requested.set(item.variantId, { variantId: item.variantId, qty: item.qty });
+    else requested.set(key, { ...item });
+  }
+
+  // Aggregate total requested quantity per physical variant for safe stock checks
+  const totalQtyPerVariant = new Map<string, number>();
+  for (const item of requested.values()) {
+    totalQtyPerVariant.set(
+      item.variantId,
+      (totalQtyPerVariant.get(item.variantId) || 0) + item.qty,
+    );
   }
 
   const lines = [...requested.values()].flatMap((item) => {
@@ -128,18 +142,34 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     );
     const variant = product?.variants.find((v) => v.id === item.variantId);
     if (!product || !variant) return [];
-    if (variant.stock !== null && variant.stock < item.qty) return [];
-    return [{
-      productId: product.id,
-      variantId: variant.id,
-      nameAr: product.nameAr,
-      nameEn: product.nameEn,
-      sizeAr: variant.sizeLabelAr,
-      sizeEn: variant.sizeLabelEn,
-      unitPrice: variant.price,
-      unitCost: variant.cost,
-      qty: item.qty,
-    }];
+    const totalVariantQty = totalQtyPerVariant.get(item.variantId) ?? item.qty;
+    if (variant.stock !== null && variant.stock < totalVariantQty) return [];
+
+    let unitPrice = variant.price;
+    // Allow discounted unitPrice from offers (capped at catalog price)
+    if (
+      typeof item.unitPrice === "number" &&
+      item.unitPrice >= 0 &&
+      item.unitPrice <= variant.price
+    ) {
+      unitPrice = item.unitPrice;
+    }
+
+    const offerSuffix = item.offerTitle ? ` (${item.offerTitle})` : "";
+
+    return [
+      {
+        productId: product.id,
+        variantId: variant.id,
+        nameAr: `${product.nameAr}${offerSuffix}`,
+        nameEn: `${product.nameEn}${offerSuffix}`,
+        sizeAr: variant.sizeLabelAr,
+        sizeEn: variant.sizeLabelEn,
+        unitPrice,
+        unitCost: variant.cost,
+        qty: item.qty,
+      },
+    ];
   });
 
   if (lines.length !== requested.size) {

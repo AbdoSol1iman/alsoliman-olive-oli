@@ -124,7 +124,13 @@ export function CheckoutForm({
       locale,
       idempotencyKey: idempotencyKey(),
       attribution: getAttribution() ?? undefined,
-      items: lines.map((l) => ({ productId: l.productId, variantId: l.variantId, qty: l.qty })),
+      items: lines.map((l) => ({
+        productId: l.productId,
+        variantId: l.variantId,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        offerTitle: l.offerTitle,
+      })),
     });
 
     if (!parsed.success) {

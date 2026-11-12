@@ -85,12 +85,17 @@ export function CartView({
                     </h2>
                     <p className="mt-1 text-[0.75rem] text-ink-muted">
                       {locale === "ar" ? line.variant.sizeLabelAr : line.variant.sizeLabelEn} ·{" "}
-                      {formatPrice(line.variant.price, locale)}
+                      {formatPrice(line.unitPrice, locale)}
+                      {line.offerTitle ? (
+                        <span className="ms-1.5 inline-block rounded-xs bg-gold/20 px-1.5 py-0.5 text-[0.66rem] font-medium text-forest-deep">
+                          {line.offerTitle}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
                   <button
                     type="button"
-                    onClick={() => remove(line.variant.id)}
+                    onClick={() => remove(line.key)}
                     aria-label={`${dict.cart.remove} — ${locale === "ar" ? line.product.nameAr : line.product.nameEn}`}
                     className="grid size-8 place-items-center rounded-full text-ink-muted transition-colors hover:bg-cream hover:text-forest"
                   >
@@ -104,7 +109,7 @@ export function CartView({
                     value={line.qty}
                     min={1}
                     max={line.maxQty}
-                    onChange={(n) => setQty(line.variant.id, n)}
+                    onChange={(n) => setQty(line.key, n)}
                     label={dict.cart.qty}
                   />
                   <span className="tnum text-[0.95rem] font-medium text-forest">
