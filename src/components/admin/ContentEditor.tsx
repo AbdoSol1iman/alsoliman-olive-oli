@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { saveContentAction } from "@/app/actions/settings";
+import { saveContentAction, saveMediaImageAction } from "@/app/actions/settings";
 import { MediaPicker } from "./MediaPicker";
 import { FormMessage, MiniButton, humanError, inputClass, textareaClass, Toggle } from "./ui";
 import { cx } from "@/lib/format";
@@ -244,6 +244,16 @@ export type EditorSection = {
   initial: Json;
   /** false = plain object (e.g. media), true = { ar, en } overlays */
   bilingual?: boolean;
+  /**
+   * Optional image that lives in `content:media` but is edited in this tab
+   * (the story tab owns `media.storyImage`). It is saved with the section.
+   */
+  mediaImage?: {
+    field: "heroImage" | "storyImage" | "whyImage";
+    label: string;
+    value: string;
+    hint?: string;
+  };
 };
 
 /**
@@ -259,6 +269,11 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
     Object.fromEntries(sections.map((s) => [s.key, structuredClone(s.initial)])),
   );
   const [locale, setLocale] = useState<"ar" | "en">("ar");
+  const [mediaImages, setMediaImages] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      sections.filter((s) => s.mediaImage).map((s) => [s.key, s.mediaImage!.value]),
+    ),
+  );
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -274,17 +289,31 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
     setMessage(null);
     startTransition(async () => {
       const result = await saveContentAction(active.key, currentValue);
-      setMessage(
-        result.ok
-          ? { ok: true, text: "تم الحفظ — التغيير ظاهر في الموقع فورًا." }
-          : { ok: false, text: humanError(result.error) },
-      );
+      if (!result.ok) {
+        setMessage({ ok: false, text: humanError(result.error) });
+        return;
+      }
+      if (active.mediaImage) {
+        const imageResult = await saveMediaImageAction(
+          active.mediaImage.field,
+          mediaImages[active.key] ?? "",
+        );
+        if (!imageResult.ok) {
+          setMessage({ ok: false, text: humanError(imageResult.error) });
+          return;
+        }
+      }
+      setMessage({ ok: true, text: "تم الحفظ — التغيير ظاهر في الموقع فورًا." });
     });
   };
 
   const reset = () => {
     if (!window.confirm("إرجاع هذا القسم للنص الأصلي؟ ستفقد تعديلاتك المحفوظة فيه.")) return;
     setValues((prev) => ({ ...prev, [active.key]: structuredClone(active.initial) }));
+    if (active.mediaImage) {
+      const initialImage = active.mediaImage.value;
+      setMediaImages((prev) => ({ ...prev, [active.key]: initialImage }));
+    }
     setMessage(null);
   };
 
@@ -342,6 +371,22 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
         </header>
 
         <div className="p-5">
+          {active.mediaImage ? (
+            <div className="mb-5 border-b border-gold/15 pb-5">
+              <span className="mb-1.5 block text-[0.75rem] text-forest">
+                {active.mediaImage.label}
+              </span>
+              <MediaPicker
+                current={mediaImages[active.key] || undefined}
+                onSelect={(p) => setMediaImages((prev) => ({ ...prev, [active.key]: p }))}
+                onClear={() => setMediaImages((prev) => ({ ...prev, [active.key]: "" }))}
+                triggerLabel="اختر صورة"
+              />
+              {active.mediaImage.hint ? (
+                <p className="mt-1.5 text-[0.68rem] text-ink-muted">{active.mediaImage.hint}</p>
+              ) : null}
+            </div>
+          ) : null}
           <Fields
             value={bilingual ? currentValue?.[locale] : currentValue}
             path={rootPath}

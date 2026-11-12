@@ -41,6 +41,12 @@ export default async function AdminHomepagePage() {
       key: "story",
       title: "قصتنا",
       initial: content.story,
+      mediaImage: {
+        field: "storyImage",
+        label: "صورة قسم القصة",
+        value: content.media.storyImage,
+        hint: "تظهر بجانب نص القصة — عند حذفها يعود الشكل الافتراضي للقسم.",
+      },
     },
     {
       key: "why",

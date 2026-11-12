@@ -122,6 +122,38 @@ const contentSchemas: Record<string, z.ZodType> = {
   }),
 };
 
+const mediaImageField = z.enum(["heroImage", "storyImage", "whyImage"]);
+
+/**
+ * Patch one image field of `content:media` without touching the others.
+ * Used by section tabs that show a shared homepage image (e.g. the story tab
+ * owns `storyImage`, which also lives in the «صور الرئيسية» tab).
+ */
+export async function saveMediaImageAction(
+  field: "heroImage" | "storyImage" | "whyImage",
+  path: string,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const parsedField = mediaImageField.safeParse(field);
+  const parsedPath = z.string().trim().max(300).safeParse(path);
+  if (!parsedField.success || !parsedPath.success) return fail("invalid_image");
+
+  try {
+    const { getContentAdmin, saveContentSection } = await import("@/lib/content");
+    const content = await getContentAdmin();
+    await saveContentSection("media", { ...content.media, [parsedField.data]: parsedPath.data });
+    revalidatePath("/admin", "layout");
+    revalidatePath("/admin/homepage");
+    revalidatePath("/ar", "layout");
+    revalidatePath("/en", "layout");
+    return { ok: true };
+  } catch (e) {
+    console.error("[admin] save media image failed", e);
+    return fail("save_failed");
+  }
+}
+
 export async function saveContentAction(
   section: string,
   value: unknown,
