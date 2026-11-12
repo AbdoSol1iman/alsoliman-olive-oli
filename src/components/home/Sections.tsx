@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { OliveBranch } from "@/components/brand/Logo";
+import { OfferCard } from "@/components/home/OfferCard";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
@@ -73,64 +74,6 @@ export function OffersSection({ locale, dict }: { locale: Locale; dict: Dictiona
         </ul>
       </div>
     </section>
-  );
-}
-
-function OfferCard({
-  offer,
-  locale,
-  dict,
-}: {
-  offer: OfferItem;
-  locale: Locale;
-  dict: Dictionary;
-}) {
-  const ctaLabel = offer.cta?.trim() || dict.common.addToCart;
-  const href = offer.href?.trim() || `/${locale}/shop`;
-
-  const inner = (
-    <>
-      <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-cream via-ivory to-gold/20">
-        {offer.image ? (
-          <Image
-            src={offer.image}
-            alt={offer.title || (locale === "ar" ? "عرض" : "Offer")}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="object-cover transition-transform duration-700 ease-[var(--ease-out-soft)] group-hover:scale-[1.04]"
-          />
-        ) : (
-          <Leaf
-            size={30}
-            className="absolute inset-0 m-auto text-gold/50"
-            aria-hidden
-          />
-        )}
-      </div>
-      <div className="flex flex-1 flex-col p-5">
-        {offer.title ? <h3 className="text-[1.05rem] text-forest">{offer.title}</h3> : null}
-        {offer.subtitle ? (
-          <p className="mt-2 text-[0.82rem] leading-7 text-ink-muted">{offer.subtitle}</p>
-        ) : null}
-        <div className="mt-auto pt-5">
-          <span className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xs border border-forest/20 text-[0.8rem] tracking-wide text-forest transition-all duration-300 group-hover:border-forest group-hover:bg-forest group-hover:text-ivory">
-            <Plus size={15} />
-            <span>{ctaLabel}</span>
-          </span>
-        </div>
-      </div>
-    </>
-  );
-
-  const className =
-    "group flex h-full flex-col overflow-hidden border border-gold/20 bg-ivory transition-colors hover:border-forest/40";
-
-  return href ? (
-    <Link href={href} className={className}>
-      {inner}
-    </Link>
-  ) : (
-    <div className={className}>{inner}</div>
   );
 }
 

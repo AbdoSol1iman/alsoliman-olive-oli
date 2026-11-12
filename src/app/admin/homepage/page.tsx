@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getContentAdmin } from "@/lib/content";
+import { getStoreProducts } from "@/lib/catalog";
 import { ContentSections, type EditorSection } from "@/components/admin/ContentEditor";
 
 export const instant = false;
@@ -10,7 +11,10 @@ export const metadata = { title: "محرر الصفحة الرئيسية · Admi
 export default async function AdminHomepagePage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  const content = await getContentAdmin();
+  const [content, products] = await Promise.all([
+    getContentAdmin(),
+    getStoreProducts(),
+  ]);
 
   const sections: EditorSection[] = [
     {
@@ -29,9 +33,18 @@ export default async function AdminHomepagePage() {
     {
       key: "offers",
       title: "العروض",
-      description: "بطاقات العروض التي تظهر أسفل قسم المنتجات — لكل عرض عنوان وصورة ورابط وزر.",
+      description: "بطاقات العروض التي تظهر أسفل قسم المنتجات — فعّل خيار «قائمة منسدلة للأحجام» لإتاحة اختيار الحجم وتفعيل زر أضف للسلة مباشرة.",
       initial: content.offers,
-      itemTemplate: { title: "", subtitle: "", image: "", href: "", cta: "", enabled: true },
+      itemTemplate: {
+        title: "",
+        subtitle: "",
+        image: "",
+        href: "",
+        cta: "أضف للسلة",
+        hasDropdown: false,
+        productId: "",
+        enabled: true,
+      },
     },
     {
       key: "featured",
@@ -79,7 +92,7 @@ export default async function AdminHomepagePage() {
           عدّل نصوص وأقسام الصفحة الرئيسية بالعربية والإنجليزية — كل تعديل يظهر في الموقع فورًا بدون إعادة نشر.
         </p>
       </div>
-      <ContentSections sections={sections} />
+      <ContentSections sections={sections} products={products} />
     </div>
   );
 }

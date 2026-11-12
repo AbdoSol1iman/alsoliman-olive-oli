@@ -37,6 +37,8 @@ const LABELS: Record<string, string> = {
   image: "الصورة",
   href: "الرابط",
   subtitle: "عنوان فرعي",
+  hasDropdown: "قائمة منسدلة للأحجام (لتفعيل زر أضف للسلة)",
+  productId: "المنتج المرتبط (اختياري)",
   enabled: "مفعّل",
   sections: "الأقسام",
   blurb: "وصف مختصر",
@@ -93,17 +95,38 @@ function Fields({
   path,
   onChange,
   newItem,
+  products,
 }: {
   value: Json;
   path: (string | number)[];
   onChange: (path: (string | number)[], value: Json) => void;
   /** Shape used when adding the first row of an empty object array. */
   newItem?: Json;
+  products?: { id: string; nameAr: string; nameEn: string }[];
 }) {
   if (value === null || value === undefined) return null;
 
   if (typeof value === "string") {
     const key = String(path[path.length - 1] ?? "");
+    if (key === "productId" && products && products.length > 0) {
+      return (
+        <label className="block">
+          <span className="mb-1.5 block text-[0.75rem] text-forest">{labelFor(key)}</span>
+          <select
+            value={value || ""}
+            onChange={(e) => onChange(path, e.target.value)}
+            className={cx(inputClass, "appearance-none pe-8 cursor-pointer")}
+          >
+            <option value="">جميع المنتجات والأحجام (تلقائي)</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nameAr} ({p.id})
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
     if (isImageKey(key)) {
       return (
         <div>
@@ -189,7 +212,7 @@ function Fields({
                 </div>
               ) : null}
               {objectRows ? (
-                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} />
+                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} products={products} />
               ) : typeof item === "string" ? (
                 <div className="flex items-start gap-2">
                   {isLongText(item) ? (
@@ -214,7 +237,7 @@ function Fields({
                   </MiniButton>
                 </div>
               ) : (
-                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} />
+                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} products={products} />
               )}
             </div>
           ))}
@@ -230,10 +253,15 @@ function Fields({
   }
 
   if (typeof value === "object") {
+    const merged =
+      newItem && typeof newItem === "object" && !Array.isArray(newItem)
+        ? { ...newItem, ...(value as Record<string, Json>) }
+        : (value as Record<string, Json>);
+
     return (
       <div className="grid gap-4 sm:grid-cols-2">
-        {Object.entries(value as Record<string, Json>).map(([k, v]) => (
-          <Fields key={k} value={v} path={[...path, k]} onChange={onChange} newItem={newItem} />
+        {Object.entries(merged).map(([k, v]) => (
+          <Fields key={k} value={v} path={[...path, k]} onChange={onChange} newItem={newItem} products={products} />
         ))}
       </div>
     );
@@ -270,7 +298,13 @@ export type EditorSection = {
  * in place; saving writes the whole section overlay and revalidates the
  * storefront immediately (no redeploy).
  */
-export function ContentSections({ sections }: { sections: EditorSection[] }) {
+export function ContentSections({
+  sections,
+  products,
+}: {
+  sections: EditorSection[];
+  products?: { id: string; nameAr: string; nameEn: string }[];
+}) {
   const [activeKey, setActiveKey] = useState(sections[0]?.key ?? "");
   const active = sections.find((s) => s.key === activeKey) ?? sections[0];
 
@@ -401,6 +435,7 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
             path={rootPath}
             onChange={change}
             newItem={active.itemTemplates?.[locale] ?? active.itemTemplate}
+            products={products}
           />
         </div>
 

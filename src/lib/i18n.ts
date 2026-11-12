@@ -8,6 +8,8 @@ export type OfferItem = {
   href: string;
   cta: string;
   enabled: boolean;
+  hasDropdown?: boolean;
+  productId?: string;
 };
 
 const ar = {
