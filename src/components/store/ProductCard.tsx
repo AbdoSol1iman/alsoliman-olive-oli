@@ -65,7 +65,7 @@ export function ProductCard({
         <div className={cx("relative aspect-[4/5] w-full", panelTone(variant.ml))}>
           <div
             aria-hidden
-            className="absolute inset-x-[14%] top-[9%] bottom-0 rounded-t-[999px] border border-gold/25 transition-colors duration-500 group-hover:border-gold/45"
+            className="absolute inset-x-[12%] inset-y-[7%] rounded-[999px] border border-gold/25 transition-colors duration-500 group-hover:border-gold/45"
           />
           <Image
             src={image.src}
@@ -74,13 +74,9 @@ export function ProductCard({
             priority={priority}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 28vw"
             className={cx(
-              "object-contain object-bottom p-[13%] pb-[3%] transition-transform duration-[900ms] ease-[var(--ease-out-soft)] group-hover:scale-[1.035]",
+              "object-contain object-center p-7 md:p-8 transition-transform duration-[900ms] ease-[var(--ease-out-soft)] group-hover:scale-[1.035]",
               soldOut && "opacity-55 grayscale-[0.4]",
             )}
-            style={{
-              maskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-              WebkitMaskImage: "linear-gradient(to bottom, #000 94%, transparent 100%)",
-            }}
           />
 
           <span className="absolute start-3 top-3 inline-flex items-center rounded-xs border border-forest/10 bg-ivory/70 px-2.5 py-1 text-[0.62rem] tracking-[0.12em] text-forest backdrop-blur-sm">

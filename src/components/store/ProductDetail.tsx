@@ -68,7 +68,7 @@ export function ProductDetail({
         <div className="relative h-[clamp(420px,72vh,640px)] w-full overflow-hidden bg-cream/50">
           <div
             aria-hidden
-            className="absolute inset-x-[14%] top-[8%] bottom-0 rounded-t-[999px] border border-gold/25"
+            className="absolute inset-x-[12%] inset-y-[6%] rounded-[999px] border border-gold/25"
           />
           <Image
             key={`${variant.id}:${activeImage.src}`}
@@ -77,11 +77,7 @@ export function ProductDetail({
             fill
             priority
             sizes="(max-width: 1024px) 100vw, 46vw"
-            className="object-contain object-bottom p-[12%] pb-[2%]"
-            style={{
-              maskImage: "linear-gradient(to bottom, #000 95%, transparent 100%)",
-              WebkitMaskImage: "linear-gradient(to bottom, #000 95%, transparent 100%)",
-            }}
+            className="object-contain object-center p-8 md:p-10"
           />
           {product.badgeAr ? (
             <span className="absolute start-4 top-4 rounded-xs border border-gold/40 bg-ivory/80 px-3 py-1 text-[0.62rem] tracking-[0.16em] text-forest backdrop-blur-sm">
