@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { saveContentAction, saveMediaImageAction } from "@/app/actions/settings";
 import { MediaPicker } from "./MediaPicker";
 import { FormMessage, MiniButton, humanError, inputClass, textareaClass, Toggle } from "./ui";
@@ -37,8 +37,11 @@ const LABELS: Record<string, string> = {
   image: "الصورة",
   href: "الرابط",
   subtitle: "عنوان فرعي",
-  hasDropdown: "قائمة منسدلة للأحجام (لتفعيل زر أضف للسلة)",
+  hasDropdown: "إتاحة قائمة منسدلة للأحجام على البطاقة",
+  productIds: "المنتجات المشمولة في العرض (تجميع منتج أو أكثر)",
   productId: "المنتج المرتبط (اختياري)",
+  compareAt: "السعر قبل الخصم (ج.م)",
+  price: "سعر العرض (ج.م) — اختياري",
   enabled: "مفعّل",
   sections: "الأقسام",
   blurb: "وصف مختصر",
@@ -89,6 +92,192 @@ const emptyItem = (sample: Json): Json => {
   return "";
 };
 
+export type AdminProduct = {
+  id: string;
+  nameAr: string;
+  nameEn: string;
+  variants?: Array<{
+    id: string;
+    sizeLabelAr: string;
+    sizeLabelEn: string;
+    price: number;
+    stock: number | null;
+  }>;
+};
+
+type VariantOption = {
+  id: string;
+  productId: string;
+  label: string;
+  price: number;
+};
+
+function ProductCombiner({
+  value,
+  onChange,
+  products,
+}: {
+  value: Json;
+  onChange: (val: string[]) => void;
+  products?: AdminProduct[];
+}) {
+  const options = useMemo<VariantOption[]>(() => {
+    if (!products || products.length === 0) return [];
+    const list: VariantOption[] = [];
+    for (const p of products) {
+      if (p.variants && p.variants.length > 0) {
+        for (const v of p.variants) {
+          list.push({
+            id: v.id,
+            productId: p.id,
+            label: `${p.nameAr} — ${v.sizeLabelAr}`,
+            price: v.price,
+          });
+        }
+      } else {
+        list.push({
+          id: p.id,
+          productId: p.id,
+          label: p.nameAr,
+          price: 0,
+        });
+      }
+    }
+    return list;
+  }, [products]);
+
+  const rawArray = Array.isArray(value)
+    ? (value as string[])
+    : typeof value === "string" && value
+      ? [value]
+      : [];
+
+  const counts: Record<string, number> = {};
+  for (const item of rawArray) {
+    if (typeof item === "string" && item.trim()) {
+      counts[item] = (counts[item] || 0) + 1;
+    }
+  }
+
+  const totalAmount = options.reduce((sum: number, opt: VariantOption) => {
+    const c = counts[opt.id] || 0;
+    return sum + opt.price * c;
+  }, 0);
+
+  const totalUnits = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const updateCount = (id: string, newCount: number) => {
+    const nextCounts = { ...counts };
+    if (newCount <= 0) {
+      delete nextCounts[id];
+    } else {
+      nextCounts[id] = newCount;
+    }
+    const newArray: string[] = [];
+    for (const [vId, c] of Object.entries(nextCounts)) {
+      for (let i = 0; i < c; i++) {
+        newArray.push(vId);
+      }
+    }
+    onChange(newArray);
+  };
+
+  return (
+    <div className="rounded-xs border border-gold/30 bg-cream/25 p-3.5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gold/20 pb-2">
+        <span className="text-[0.75rem] font-medium text-forest">
+          المنتجات المشمولة في العرض (تجميع منتج أو أكثر)
+        </span>
+        {totalUnits > 0 ? (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-xs bg-forest px-2 py-0.5 text-[0.7rem] font-medium text-ivory">
+              المجموع المحسوب: {totalAmount} ج.م ({totalUnits} قطع)
+            </span>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="text-[0.68rem] text-red-800 hover:underline cursor-pointer"
+            >
+              إلغاء التحديد
+            </button>
+          </div>
+        ) : (
+          <span className="text-[0.68rem] text-ink-muted">لم يتم تحديد منتجات بعد</span>
+        )}
+      </div>
+
+      {options.length === 0 ? (
+        <p className="text-[0.72rem] text-ink-muted">لا توجد منتجات مسجلة في المتجر.</p>
+      ) : (
+        <div className="space-y-2">
+          {options.map((opt: VariantOption) => {
+            const count = counts[opt.id] || 0;
+            const isSelected = count > 0;
+            return (
+              <div
+                key={opt.id}
+                className={cx(
+                  "flex items-center justify-between gap-3 rounded-xs border p-2.5 transition-colors text-sm",
+                  isSelected
+                    ? "border-forest/50 bg-ivory shadow-2xs"
+                    : "border-gold/20 bg-ivory/60 hover:border-gold/40 hover:bg-ivory",
+                )}
+              >
+                <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0 select-none">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={(e) => updateCount(opt.id, e.target.checked ? 1 : 0)}
+                    className="size-4 accent-forest cursor-pointer rounded-xs"
+                  />
+                  <span className="font-medium text-forest text-[0.82rem] truncate">{opt.label}</span>
+                  <span className="text-[0.75rem] text-gold font-medium">({opt.price} ج.م)</span>
+                </label>
+
+                {isSelected ? (
+                  <div className="flex items-center gap-1.5 bg-cream/40 border border-gold/30 rounded-xs px-2 py-0.5">
+                    <button
+                      type="button"
+                      onClick={() => updateCount(opt.id, count - 1)}
+                      className="size-5 flex items-center justify-center text-forest hover:bg-forest/15 rounded-xs text-xs font-bold transition-colors cursor-pointer"
+                      title="إنقاص الكمية"
+                    >
+                      -
+                    </button>
+                    <span className="w-5 text-center text-xs font-semibold text-forest">
+                      {count}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => updateCount(opt.id, count + 1)}
+                      className="size-5 flex items-center justify-center text-forest hover:bg-forest/15 rounded-xs text-xs font-bold transition-colors cursor-pointer"
+                      title="زيادة الكمية"
+                    >
+                      +
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => updateCount(opt.id, 1)}
+                    className="rounded-xs border border-gold/30 bg-ivory px-2 py-0.5 text-[0.7rem] text-forest hover:border-forest transition-colors cursor-pointer"
+                  >
+                    + إضافة
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="text-[0.68rem] leading-5 text-ink-muted">
+        💡 عند نقر المشتري على زر «أضف للسلة» في هذا العرض، ستتم إضافة جميع المنتجات المحددة أعلاه تلقائياً إلى السلة بأسعارها المجمعة.
+      </p>
+    </div>
+  );
+}
+
 /** Recursive renderer: one control per leaf, cards for object arrays. */
 function Fields({
   value,
@@ -102,12 +291,75 @@ function Fields({
   onChange: (path: (string | number)[], value: Json) => void;
   /** Shape used when adding the first row of an empty object array. */
   newItem?: Json;
-  products?: { id: string; nameAr: string; nameEn: string }[];
+  products?: AdminProduct[];
 }) {
   if (value === null || value === undefined) return null;
 
+  const key = String(path[path.length - 1] ?? "");
+
+  if (key === "productIds") {
+    return (
+      <ProductCombiner
+        value={value}
+        onChange={(val) => onChange(path, val)}
+        products={products}
+      />
+    );
+  }
+
+  if (key === "compareAt") {
+    return (
+      <label className="block">
+        <span className="mb-1.5 block text-[0.75rem] text-forest">{labelFor(key)}</span>
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            placeholder="مثال: 750 (اتركه فارغاً إن لم يكن هناك خصم)"
+            value={value !== null && value !== undefined && value !== "" ? String(value) : ""}
+            onChange={(e) =>
+              onChange(path, e.target.value === "" ? "" : Number(e.target.value))
+            }
+            className={cx(inputClass, "pe-10")}
+          />
+          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-[0.72rem] text-ink-muted">
+            ج.م
+          </span>
+        </div>
+        <p className="mt-1 text-[0.68rem] text-ink-muted">
+          السعر قبل الخصم: يظهر مشطوباً بجانب سعر العرض في الموقع لإبراز قيمة التوفير للمشتري.
+        </p>
+      </label>
+    );
+  }
+
+  if (key === "price") {
+    return (
+      <label className="block">
+        <span className="mb-1.5 block text-[0.75rem] text-forest">{labelFor(key)}</span>
+        <div className="relative">
+          <input
+            type="number"
+            min={0}
+            placeholder="فارغ = استخدام المجموع المحسوب للمنتجات المحددة تلقائياً"
+            value={value !== null && value !== undefined && value !== "" ? String(value) : ""}
+            onChange={(e) =>
+              onChange(path, e.target.value === "" ? "" : Number(e.target.value))
+            }
+            className={cx(inputClass, "pe-10")}
+          />
+          <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center text-[0.72rem] text-ink-muted">
+            ج.م
+          </span>
+        </div>
+        <p className="mt-1 text-[0.68rem] text-ink-muted">
+          سعر العرض بعد الخصم — إذا تُرك فارغاً، سيتم احتساب مجموع أسعار المنتجات المحددة في العرض تلقائياً.
+        </p>
+      </label>
+    );
+  }
+
   if (typeof value === "string") {
-    const key = String(path[path.length - 1] ?? "");
     if (key === "productId" && products && products.length > 0) {
       return (
         <label className="block">
@@ -124,6 +376,9 @@ function Fields({
               </option>
             ))}
           </select>
+          <p className="mt-1 text-[0.68rem] text-ink-muted">
+            (إذا حددت منتجات في قسم التجميع أعلاه، فستكون لها الأولوية)
+          </p>
         </label>
       );
     }
@@ -303,7 +558,7 @@ export function ContentSections({
   products,
 }: {
   sections: EditorSection[];
-  products?: { id: string; nameAr: string; nameEn: string }[];
+  products?: AdminProduct[];
 }) {
   const [activeKey, setActiveKey] = useState(sections[0]?.key ?? "");
   const active = sections.find((s) => s.key === activeKey) ?? sections[0];

@@ -10,6 +10,9 @@ export type OfferItem = {
   enabled: boolean;
   hasDropdown?: boolean;
   productId?: string;
+  productIds?: string[];
+  compareAt?: number | string | null;
+  price?: number | string | null;
 };
 
 const ar = {

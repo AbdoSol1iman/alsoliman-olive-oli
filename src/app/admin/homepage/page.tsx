@@ -33,7 +33,7 @@ export default async function AdminHomepagePage() {
     {
       key: "offers",
       title: "العروض",
-      description: "بطاقات العروض التي تظهر أسفل قسم المنتجات — فعّل خيار «قائمة منسدلة للأحجام» لإتاحة اختيار الحجم وتفعيل زر أضف للسلة مباشرة.",
+      description: "بطاقات العروض التي تظهر أسفل قسم المنتجات — يمكنك اختيار وتجميع منتج أو أكثر في العرض ليتم احتساب أسعارها المجمعة وإضافتها معاً للسلة، وتحديد السعر قبل الخصم.",
       initial: content.offers,
       itemTemplate: {
         title: "",
@@ -41,6 +41,9 @@ export default async function AdminHomepagePage() {
         image: "",
         href: "",
         cta: "أضف للسلة",
+        compareAt: "",
+        price: "",
+        productIds: [],
         hasDropdown: false,
         productId: "",
         enabled: true,

@@ -115,5 +115,26 @@ export const bannerSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+export const offerItemSchema = z.object({
+  title: z.string().trim().max(160).default(""),
+  subtitle: z.string().trim().max(300).default(""),
+  image: z.string().trim().max(300).default(""),
+  href: z.string().trim().max(300).default(""),
+  cta: z.string().trim().max(80).default(""),
+  enabled: z.boolean().default(true),
+  hasDropdown: z.boolean().optional().default(false),
+  productId: z.string().trim().max(64).optional().default(""),
+  productIds: z.array(z.string().trim().max(64)).optional().default([]),
+  compareAt: z
+    .union([z.coerce.number().int().min(0).max(10_000_000), z.literal(""), z.null()])
+    .optional()
+    .default(null),
+  price: z
+    .union([z.coerce.number().int().min(0).max(10_000_000), z.literal(""), z.null()])
+    .optional()
+    .default(null),
+});
+
 export type FaqItem = z.infer<typeof faqItemSchema>;
 export type Banner = z.infer<typeof bannerSchema>;
+export type OfferItemInput = z.infer<typeof offerItemSchema>;

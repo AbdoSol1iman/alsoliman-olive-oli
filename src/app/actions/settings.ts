@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { saveSettings, type Settings } from "@/lib/settings";
-import { bannerSchema, faqItemSchema } from "@/lib/admin-schemas";
+import { bannerSchema, faqItemSchema, offerItemSchema } from "@/lib/admin-schemas";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -125,13 +125,13 @@ const contentSchemas: Record<string, z.ZodType> = {
       eyebrow: z.string().trim().max(80),
       title: z.string().trim().max(160),
       body: z.string().trim().max(300),
-      items: z.array(bannerSchema).max(8),
+      items: z.array(offerItemSchema).max(8),
     }),
     en: z.object({
       eyebrow: z.string().trim().max(80),
       title: z.string().trim().max(160),
       body: z.string().trim().max(300),
-      items: z.array(bannerSchema).max(8),
+      items: z.array(offerItemSchema).max(8),
     }),
   }),
 };
