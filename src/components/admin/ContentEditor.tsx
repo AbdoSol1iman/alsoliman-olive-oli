@@ -80,7 +80,7 @@ const emptyItem = (sample: Json): Json => {
   if (sample && typeof sample === "object" && !Array.isArray(sample)) {
     const out: Record<string, Json> = {};
     for (const [k, v] of Object.entries(sample)) {
-      out[k] = typeof v === "string" ? "" : typeof v === "number" ? 0 : typeof v === "boolean" ? false : [];
+      out[k] = typeof v === "string" ? "" : typeof v === "number" ? 0 : typeof v === "boolean" ? v : [];
     }
     return out;
   }
@@ -92,10 +92,13 @@ function Fields({
   value,
   path,
   onChange,
+  newItem,
 }: {
   value: Json;
   path: (string | number)[];
   onChange: (path: (string | number)[], value: Json) => void;
+  /** Shape used when adding the first row of an empty object array. */
+  newItem?: Json;
 }) {
   if (value === null || value === undefined) return null;
 
@@ -164,6 +167,7 @@ function Fields({
   if (Array.isArray(value)) {
     const key = String(path[path.length - 1] ?? "القائمة");
     const objectRows = value.length > 0 && typeof value[0] === "object" && value[0] !== null && !Array.isArray(value[0]);
+    const addsObject = objectRows || (value.length === 0 && newItem !== undefined);
     return (
       <fieldset className="border border-gold/20 bg-cream/20 p-3.5">
         <legend className="px-1.5 text-[0.75rem] text-forest">
@@ -184,7 +188,7 @@ function Fields({
                 </div>
               ) : null}
               {objectRows ? (
-                <Fields value={item} path={[...path, i]} onChange={onChange} />
+                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} />
               ) : typeof item === "string" ? (
                 <div className="flex items-start gap-2">
                   {isLongText(item) ? (
@@ -209,15 +213,15 @@ function Fields({
                   </MiniButton>
                 </div>
               ) : (
-                <Fields value={item} path={[...path, i]} onChange={onChange} />
+                <Fields value={item} path={[...path, i]} onChange={onChange} newItem={newItem} />
               )}
             </div>
           ))}
           <MiniButton
-            onClick={() => onChange(path, [...value, emptyItem(value[0])])}
+            onClick={() => onChange(path, [...value, emptyItem(value[0] ?? newItem)])}
             className="border-forest/40"
           >
-            + إضافة {objectRows ? "عنصر" : "بند"}
+            + إضافة {addsObject ? "عنصر" : "بند"}
           </MiniButton>
         </div>
       </fieldset>
@@ -228,7 +232,7 @@ function Fields({
     return (
       <div className="grid gap-4 sm:grid-cols-2">
         {Object.entries(value as Record<string, Json>).map(([k, v]) => (
-          <Fields key={k} value={v} path={[...path, k]} onChange={onChange} />
+          <Fields key={k} value={v} path={[...path, k]} onChange={onChange} newItem={newItem} />
         ))}
       </div>
     );
@@ -254,6 +258,8 @@ export type EditorSection = {
     value: string;
     hint?: string;
   };
+  /** Shape for the first row when an object array starts empty. */
+  itemTemplate?: Json;
 };
 
 /**
@@ -391,6 +397,7 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
             value={bilingual ? currentValue?.[locale] : currentValue}
             path={rootPath}
             onChange={change}
+            newItem={active.itemTemplate}
           />
         </div>
 

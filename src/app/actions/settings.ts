@@ -120,6 +120,20 @@ const contentSchemas: Record<string, z.ZodType> = {
     storyImage: z.string().trim().max(300),
     whyImage: z.string().trim().max(300),
   }),
+  offers: z.object({
+    ar: z.object({
+      eyebrow: z.string().trim().max(80),
+      title: z.string().trim().max(160),
+      body: z.string().trim().max(300),
+      items: z.array(bannerSchema).max(8),
+    }),
+    en: z.object({
+      eyebrow: z.string().trim().max(80),
+      title: z.string().trim().max(160),
+      body: z.string().trim().max(300),
+      items: z.array(bannerSchema).max(8),
+    }),
+  }),
 };
 
 const mediaImageField = z.enum(["heroImage", "storyImage", "whyImage"]);

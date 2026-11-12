@@ -7,7 +7,7 @@ import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ArrowEnd, Leaf, Ruler, Shield, Sparkle } from "@/components/ui/Icons";
 import type { ListingItem } from "@/lib/products";
-import type { Dictionary } from "@/lib/i18n";
+import type { Dictionary, OfferItem } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
 
 const trustIcons = [Shield, Leaf, Sparkle, Ruler];
@@ -38,6 +38,91 @@ export function TrustStrip({ dict }: { dict: Dictionary }) {
         })}
       </div>
     </section>
+  );
+}
+
+export function OffersSection({ locale, dict }: { locale: Locale; dict: Dictionary }) {
+  const offers = dict.offers.items.filter(
+    (offer) => offer.enabled && (offer.title.trim() || offer.image.trim()),
+  );
+  if (offers.length === 0) return null;
+
+  return (
+    <section
+      className="border-y border-gold/15 bg-cream/30 py-16 md:py-20"
+      aria-labelledby="offers-title"
+    >
+      <div className="container-page">
+        <SectionHeading
+          eyebrow={dict.offers.eyebrow}
+          title={<span id="offers-title">{dict.offers.title}</span>}
+          body={dict.offers.body || undefined}
+        />
+
+        <ul className="mt-10 flex flex-wrap gap-5">
+          {offers.map((offer, i) => (
+            <Reveal
+              key={`${offer.title}-${i}`}
+              as="li"
+              delay={i * 80}
+              className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
+            >
+              <OfferCard offer={offer} locale={locale} />
+            </Reveal>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function OfferCard({ offer, locale }: { offer: OfferItem; locale: Locale }) {
+  const inner = (
+    <>
+      <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-cream via-ivory to-gold/20">
+        {offer.image ? (
+          <Image
+            src={offer.image}
+            alt={offer.title || (locale === "ar" ? "عرض" : "Offer")}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-700 ease-[var(--ease-out-soft)] group-hover:scale-[1.04]"
+          />
+        ) : (
+          <Leaf
+            size={30}
+            className="absolute inset-0 m-auto text-gold/50"
+            aria-hidden
+          />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col p-5">
+        {offer.title ? <h3 className="text-[1.05rem] text-forest">{offer.title}</h3> : null}
+        {offer.subtitle ? (
+          <p className="mt-2 text-[0.82rem] leading-7 text-ink-muted">{offer.subtitle}</p>
+        ) : null}
+        {offer.cta ? (
+          <span className="mt-auto inline-flex items-center gap-2 pt-5 text-[0.78rem] text-forest">
+            <span className="link-underline">{offer.cta}</span>
+            <ArrowEnd
+              size={14}
+              className="text-gold transition-transform duration-500 group-hover:-translate-x-1 rtl:rotate-180 rtl:group-hover:translate-x-1"
+            />
+          </span>
+        ) : null}
+      </div>
+    </>
+  );
+
+  const className =
+    "group flex h-full flex-col overflow-hidden border border-gold/20 bg-ivory transition-colors hover:border-forest/40";
+
+  return offer.href ? (
+    <Link href={offer.href} className={className}>
+      {inner}
+    </Link>
+  ) : (
+    <div className={className}>{inner}</div>
   );
 }
 

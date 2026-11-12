@@ -1,5 +1,15 @@
 import type { Locale } from "./products";
 
+/** One promotional card in the homepage offers section. */
+export type OfferItem = {
+  title: string;
+  subtitle: string;
+  image: string;
+  href: string;
+  cta: string;
+  enabled: boolean;
+};
+
 const ar = {
   dir: "rtl",
   nav: {
@@ -57,6 +67,12 @@ const ar = {
     title: "اختياراتنا لمائدتك",
     body: "ثلاثة أحجام من نفس الزيت، لتختار ما يناسب استهلاكك اليومي.",
     all: "كل المنتجات",
+  },
+  offers: {
+    eyebrow: "عروض",
+    title: "عروض هذا الموسم",
+    body: "كميات محدودة — اختر عرضك قبل أن ينتهي.",
+    items: [] as OfferItem[],
   },
   story: {
     eyebrow: "قصتنا",
@@ -405,6 +421,12 @@ const en: Dictionary = {
     title: "Chosen for your table",
     body: "Three sizes of the same oil, so you can pick what fits your kitchen.",
     all: "All products",
+  },
+  offers: {
+    eyebrow: "Offers",
+    title: "This season's offers",
+    body: "Limited quantities — pick yours before they run out.",
+    items: [] as OfferItem[],
   },
   story: {
     eyebrow: "Our story",

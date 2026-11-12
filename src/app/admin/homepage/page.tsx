@@ -27,10 +27,11 @@ export default async function AdminHomepagePage() {
       bilingual: false,
     },
     {
-      key: "banners",
-      title: "بانرات ترويجية",
-      description: "بانرات تظهر في الصفحة الرئيسية — كل بانر له عنوان ورابط وصورة.",
-      initial: content.banners,
+      key: "offers",
+      title: "العروض",
+      description: "بطاقات العروض التي تظهر أعلى قسم المنتجات — لكل عرض عنوان وصورة ورابط وزر.",
+      initial: content.offers,
+      itemTemplate: { title: "", subtitle: "", image: "", href: "", cta: "", enabled: true },
     },
     {
       key: "featured",

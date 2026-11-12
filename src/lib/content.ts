@@ -11,6 +11,7 @@ export const CONTENT_TAG = "content";
 export const EDITABLE_SECTIONS = [
   "hero",
   "featured",
+  "offers",
   "story",
   "why",
   "culinary",
