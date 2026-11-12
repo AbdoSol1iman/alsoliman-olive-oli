@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ButtonLink } from "@/components/ui/Button";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -15,12 +16,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const isAr = locale !== "en";
+  const title = isAr ? "قصتنا" : "Our story";
+  const description = isAr
+    ? "قصة آل سليمان مع زيت الزيتون: عناية بالاختيار، وحفظ للطعم حتى المائدة."
+    : "The Alsuliman story: care in selection, and flavour preserved all the way to the table.";
   return {
-    title: isAr ? "قصتنا" : "Our story",
-    description: isAr
-      ? "قصة آل سليمان مع زيت الزيتون: عناية بالاختيار، وحفظ للطعم حتى المائدة."
-      : "The Alsuliman story: care in selection, and flavour preserved all the way to the table.",
+    title,
+    description,
     alternates: { canonical: `/${locale}/story`, languages: { ar: "/ar/story", en: "/en/story" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/story`,
+      title,
+      description,
+    }),
   };
 }
 

@@ -5,6 +5,7 @@ import { ContactForm } from "@/components/store/ContactForm";
 import { Whatsapp, Mail, Phone, Pin } from "@/components/ui/Icons";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -16,10 +17,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const isAr = locale !== "en";
+  const title = isAr ? "تواصل معنا" : "Contact us";
+  const description = isAr
+    ? "تواصل مع آل سليمان للاستفسار عن المنتجات أو الطلبات."
+    : "Contact Alsuliman about products or orders.";
   return {
-    title: isAr ? "تواصل معنا" : "Contact us",
-    description: isAr ? "تواصل مع آل سليمان للاستفسار عن المنتجات أو الطلبات." : "Contact Alsuliman about products or orders.",
+    title,
+    description,
     alternates: { canonical: `/${locale}/contact`, languages: { ar: "/ar/contact", en: "/en/contact" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/contact`,
+      title,
+      description,
+    }),
   };
 }
 

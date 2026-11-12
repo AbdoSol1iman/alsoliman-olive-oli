@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ButtonLink } from "@/components/ui/Button";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import { formatPrice } from "@/lib/format";
 import type { Locale } from "@/lib/products";
 
@@ -16,12 +17,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const isAr = locale !== "en";
+  const title = isAr ? "الشحن والإرجاع" : "Shipping & returns";
+  const description = isAr
+    ? "مصروفات الشحن ومدة التوصيل لجميع محافظات مصر، وسياسة الإرجاع."
+    : "Shipping fees and delivery times across Egypt, plus our returns policy.";
   return {
-    title: isAr ? "الشحن والإرجاع" : "Shipping & returns",
-    description: isAr
-      ? "مصروفات الشحن ومدة التوصيل لجميع محافظات مصر، وسياسة الإرجاع."
-      : "Shipping fees and delivery times across Egypt, plus our returns policy.",
+    title,
+    description,
     alternates: { canonical: `/${locale}/shipping`, languages: { ar: "/ar/shipping", en: "/en/shipping" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/shipping`,
+      title,
+      description,
+    }),
   };
 }
 

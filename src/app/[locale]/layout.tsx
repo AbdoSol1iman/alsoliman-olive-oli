@@ -12,6 +12,7 @@ import { TrackingProvider } from "@/components/analytics/TrackingProvider";
 import { getCatalog } from "@/lib/catalog";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
 
 
@@ -27,7 +28,6 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale: raw } = await params;
   const isAr = raw !== "en";
-  const locale = isAr ? "ar" : "en";
   const settings = await getSettings();
   const title = isAr ? settings.seo.titleAr : settings.seo.titleEn;
   const description = isAr ? settings.seo.descriptionAr : settings.seo.descriptionEn;
@@ -36,24 +36,12 @@ export async function generateMetadata({
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
     title: { default: title, template: `%s | ${siteName}` },
     description,
-    openGraph: {
-      type: "website",
-      locale: isAr ? "ar_EG" : "en_US",
-      url: `/${locale}`,
-      siteName,
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}`,
       title,
       description,
-      // A real JPEG social card. Pages that do not override it (home, shop,
-      // story, legal pages) previously shared with no image at all.
-      images: [
-        {
-          url: "/products/bottle-card.jpg",
-          width: 1200,
-          height: 1500,
-          alt: isAr ? `${siteName} — زيت زيتون بكر ممتاز` : `${siteName} — extra virgin olive oil`,
-        },
-      ],
-    },
+    }),
     icons: { icon: "/favicon.ico" },
   };
 }

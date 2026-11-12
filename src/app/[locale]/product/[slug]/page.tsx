@@ -6,6 +6,7 @@ import { ProductDetail } from "@/components/store/ProductDetail";
 import { ProductCard } from "@/components/store/ProductCard";
 import { findProductSlugByVariant, getCatalog } from "@/lib/catalog";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import { buildListingItems, getProduct, type Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -35,23 +36,26 @@ export async function generateMetadata({
     imageSrc.startsWith("/api/media/") && imageSrc.endsWith(".webp")
       ? imageSrc.replace("/api/media/", "/api/og/")
       : imageSrc;
+  const description = isAr ? product.hookAr : product.hookEn;
   return {
     title,
-    description: isAr ? product.hookAr : product.hookEn,
+    description,
     alternates: {
       canonical: `/${locale}/product/${slug}`,
       languages: { ar: `/ar/product/${slug}`, en: `/en/product/${slug}` },
     },
-    openGraph: {
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/product/${slug}`,
       title,
-      description: isAr ? product.hookAr : product.hookEn,
+      description,
       images: [
         {
           url: ogImage,
           alt: firstImage ? (isAr ? firstImage.altAr : firstImage.altEn) : name,
         },
       ],
-    },
+    }),
   };
 }
 

@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ButtonLink } from "@/components/ui/Button";
 import { OliveBranch } from "@/components/brand/Logo";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -15,12 +16,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const isAr = locale !== "en";
+  const title = isAr ? "عن زيت الزيتون" : "About olive oil";
+  const description = isAr
+    ? "دليل مختصر: معنى بكر ممتاز، التخزين الصحيح، والاستخدام اليومي لزيت الزيتون."
+    : "A short guide: what extra virgin means, correct storage, and everyday use of olive oil.";
   return {
-    title: isAr ? "عن زيت الزيتون" : "About olive oil",
-    description: isAr
-      ? "دليل مختصر: معنى بكر ممتاز، التخزين الصحيح، والاستخدام اليومي لزيت الزيتون."
-      : "A short guide: what extra virgin means, correct storage, and everyday use of olive oil.",
+    title,
+    description,
     alternates: { canonical: `/${locale}/olive`, languages: { ar: "/ar/olive", en: "/en/olive" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/olive`,
+      title,
+      description,
+    }),
   };
 }
 

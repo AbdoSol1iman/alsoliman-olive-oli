@@ -8,6 +8,7 @@ import { OliveBranch } from "@/components/brand/Logo";
 import { getCatalog } from "@/lib/catalog";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import { buildListingItems, buildSizeFilters, type Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -19,12 +20,20 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const isAr = locale !== "en";
+  const title = isAr ? "متجر المنتجات" : "Shop";
+  const description = isAr
+    ? "اختر حجم زيت الزيتون البكر الممتاز المناسب لمائدتك — ٥٠٠ مل، ٧٥٠ مل، و١ لتر."
+    : "Choose the extra virgin olive oil size for your table — 500 ml, 750 ml and 1 L.";
   return {
-    title: isAr ? "متجر المنتجات" : "Shop",
-    description: isAr
-      ? "اختر حجم زيت الزيتون البكر الممتاز المناسب لمائدتك — ٥٠٠ مل، ٧٥٠ مل، و١ لتر."
-      : "Choose the extra virgin olive oil size for your table — 500 ml, 750 ml and 1 L.",
+    title,
+    description,
     alternates: { canonical: `/${locale}/shop`, languages: { ar: "/ar/shop", en: "/en/shop" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/shop`,
+      title,
+      description,
+    }),
   };
 }
 

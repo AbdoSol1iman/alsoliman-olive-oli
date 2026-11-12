@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { LegalBody } from "@/components/layout/LegalBody";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { getSiteDictionary } from "@/lib/content";
+import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
 
 const isLocale = (v: string): v is Locale => v === "ar" || v === "en";
@@ -19,6 +20,12 @@ export async function generateMetadata({
     title,
     description: title,
     alternates: { canonical: `/${locale}/terms`, languages: { ar: "/ar/terms", en: "/en/terms" } },
+    openGraph: await buildOpenGraph({
+      locale: isAr ? "ar" : "en",
+      path: `/${isAr ? "ar" : "en"}/terms`,
+      title,
+      description: title,
+    }),
   };
 }
 
