@@ -49,8 +49,17 @@ export async function prepareImageForUpload(file: File): Promise<File> {
     bitmap.close?.();
 
     let blob = await canvasToBlob(canvas, "image/webp", 0.85);
+    // Older Safari cannot encode WebP from a canvas — JPEG is universal.
+    if (!blob || blob.type !== "image/webp") {
+      blob = (await canvasToBlob(canvas, "image/jpeg", 0.85)) ?? blob;
+    }
     if (blob && blob.size > 1.5 * 1024 * 1024) {
-      blob = (await canvasToBlob(canvas, "image/webp", 0.7)) ?? blob;
+      const retry = await canvasToBlob(
+        canvas,
+        blob.type === "image/jpeg" ? "image/jpeg" : "image/webp",
+        0.7,
+      );
+      if (retry && retry.size < blob.size) blob = retry;
     }
 
     // Keep whichever is smaller — a small PNG can beat a re-encode.
@@ -58,7 +67,8 @@ export async function prepareImageForUpload(file: File): Promise<File> {
     if (best.size > MAX_UPLOAD) throw new Error("file_too_large");
     if (best === file) return file;
 
-    const ext = best.type === "image/webp" ? ".webp" : ".png";
+    const ext =
+      best.type === "image/webp" ? ".webp" : best.type === "image/jpeg" ? ".jpg" : ".png";
     return new File([best], file.name.replace(/\.[^.]+$/, "") + ext, {
       type: best.type,
       lastModified: file.lastModified,
