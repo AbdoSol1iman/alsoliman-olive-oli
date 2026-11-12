@@ -149,6 +149,16 @@ const SCHEMA = `
     category TEXT NOT NULL DEFAULT 'general',
     created_at TEXT NOT NULL
   );
+  /**
+   * Binary payloads live in their own table so listing the library never
+   * transfers image data. Keeping them in the database (rather than on disk)
+   * makes uploads survive serverless hosts with a read-only filesystem.
+   */
+  CREATE TABLE IF NOT EXISTS media_blobs (
+    media_id TEXT PRIMARY KEY,
+    data BLOB NOT NULL,
+    thumb_data BLOB
+  );
   CREATE INDEX IF NOT EXISTS idx_media_category ON media(category);
 
   CREATE TABLE IF NOT EXISTS settings (

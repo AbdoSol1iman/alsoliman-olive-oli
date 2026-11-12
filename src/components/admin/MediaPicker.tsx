@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { listMediaAction, uploadMediaAction } from "@/app/actions/media";
+import { prepareImageForUpload } from "@/lib/image-compress";
 import type { MediaItem } from "@/lib/media-shared";
 import { MEDIA_CATEGORIES } from "@/lib/media-shared";
 import { cx } from "@/lib/format";
@@ -72,12 +73,14 @@ export function MediaPicker({
     setError("");
     const form = e.currentTarget;
     const formData = new FormData(form);
-    if (!(formData.get("file") instanceof File) || (formData.get("file") as File).size === 0) {
+    const file = formData.get("file");
+    if (!(file instanceof File) || file.size === 0) {
       setError("اختر ملفًا أولًا.");
       return;
     }
     setUploading(true);
     try {
+      formData.set("file", await prepareImageForUpload(file));
       const result = await uploadMediaAction(formData);
       if (!result.ok) {
         setError(humanError(result.error));
@@ -87,8 +90,12 @@ export function MediaPicker({
       const list = await listMediaAction(undefined);
       setItems(list);
       if (result.path) pick(result.path);
-    } catch {
-      setError("فشل رفع الملف.");
+    } catch (error) {
+      setError(
+        (error as Error).message === "file_too_large"
+          ? humanError("file_too_large")
+          : "فشل رفع الملف.",
+      );
     } finally {
       setUploading(false);
     }

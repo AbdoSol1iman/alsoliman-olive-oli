@@ -222,7 +222,7 @@ export const errorText: Record<string, string> = {
   not_found: "غير موجود.",
   media_in_use: "هذه الصورة مستخدمة حاليًا في صفحة أو منتج — لا يمكن حذفها.",
   unsupported_type: "نوع الملف غير مدعوم. الصور المدعومة: JPG, PNG, WebP, AVIF, GIF.",
-  file_too_large: "حجم الملف أكبر من 12 ميجابايت.",
+  file_too_large: "حجم الملف أكبر من 4 ميجابايت.",
   upload_failed: "فشل رفع الملف، حاول مرة أخرى.",
   save_failed: "فشل الحفظ، حاول مرة أخرى.",
   delete_failed: "فشل الحذف، حاول مرة أخرى.",

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState, useTransition } from "react";
 import { deleteMediaAction, uploadMediaAction, updateMediaMetaAction } from "@/app/actions/media";
+import { prepareImageForUpload } from "@/lib/image-compress";
 import { MEDIA_CATEGORIES, type MediaItem } from "@/lib/media-shared";
 import { cx } from "@/lib/format";
 import { FormMessage, humanError, inputClass, MiniButton } from "./ui";
@@ -50,6 +51,7 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
     setUploading(true);
     setMessage(null);
     try {
+      formData.set("file", await prepareImageForUpload(file));
       const result = await uploadMediaAction(formData);
       if (!result.ok) setMessage({ ok: false, text: humanError(result.error) });
       else {
@@ -57,8 +59,14 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
         setMessage({ ok: true, text: "تم رفع الصورة وتحسينها تلقائيًا (WebP)." });
         await reload(filter);
       }
-    } catch {
-      setMessage({ ok: false, text: "فشل رفع الملف." });
+    } catch (error) {
+      setMessage({
+        ok: false,
+        text:
+          (error as Error).message === "file_too_large"
+            ? humanError("file_too_large")
+            : "فشل رفع الملف.",
+      });
     } finally {
       setUploading(false);
     }
@@ -142,8 +150,8 @@ export function MediaLibrary({ initial }: { initial: MediaItem[] }) {
           </button>
         </div>
         <p className="mt-2 text-[0.7rem] text-ink-muted">
-          JPG · PNG · WebP · AVIF · GIF — حتى 12 ميجا. تُحوَّل تلقائيًا إلى WebP بجودة عالية + مصغّرة، وتُحفظ في مجلد
-          دائم يصمد مع كل عمليات النشر.
+          JPG · PNG · WebP · AVIF · GIF — تُضغط الصور الكبيرة تلقائيًا قبل الرفع، ثم تُحوَّل إلى
+          WebP بجودة عالية + مصغّرة، وتُحفظ مع قاعدة البيانات فتظهر بعد كل عمليات النشر.
         </p>
       </form>
 

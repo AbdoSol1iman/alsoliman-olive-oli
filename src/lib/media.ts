@@ -15,7 +15,7 @@ export type { MediaCategory, MediaItem };
 
 export const MEDIA_TAG = "media";
 
-const MAX_BYTES = 12 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 const MAX_EDGE = 1600;
 const THUMB_EDGE = 400;
 
@@ -53,9 +53,10 @@ const mapMedia = (row: MediaRow): MediaItem => ({
 
 /**
  * Persist an uploaded image: optimise to WebP (rotated, capped at 1600px,
- * alpha preserved), write a 400px thumbnail, store a media row. Files live
- * under `data/uploads/` — the same persistent volume as the database — so
- * they survive restarts and redeploys.
+ * alpha preserved), build a 400px thumbnail, and store both payloads in the
+ * database. Serverless hosts (Vercel) expose a read-only filesystem, so the
+ * database is the only storage that survives every deploy without an extra
+ * object-storage service.
  */
 export async function saveUploadedImage(
   file: File,
@@ -88,15 +89,9 @@ export async function saveUploadedImage(
   const id = randomUUID();
   const now = new Date();
   const subDir = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const dir = path.join(uploadsDir, subDir);
-  await fs.mkdir(dir, { recursive: true });
 
   const relPath = `/api/media/${subDir}/${id}.webp`;
   const relThumb = `/api/media/${subDir}/${id}-thumb.webp`;
-  await Promise.all([
-    fs.writeFile(path.join(dir, `${id}.webp`), optimized.data),
-    fs.writeFile(path.join(dir, `${id}-thumb.webp`), thumb),
-  ]);
 
   const item: MediaItem = {
     id,
@@ -114,25 +109,30 @@ export async function saveUploadedImage(
   };
 
   const db = await getDb();
-  await db
-    .prepare(
-      `INSERT INTO media (id, path, thumb_path, original_name, mime, size, width, height, alt_ar, alt_en, category, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      item.id,
-      item.path,
-      item.thumbPath,
-      item.originalName,
-      item.mime,
-      item.size,
-      item.width,
-      item.height,
-      item.altAr,
-      item.altEn,
-      item.category,
-      item.createdAt,
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .prepare(
+        `INSERT INTO media (id, path, thumb_path, original_name, mime, size, width, height, alt_ar, alt_en, category, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        item.id,
+        item.path,
+        item.thumbPath,
+        item.originalName,
+        item.mime,
+        item.size,
+        item.width,
+        item.height,
+        item.altAr,
+        item.altEn,
+        item.category,
+        item.createdAt,
+      );
+    await tx
+      .prepare("INSERT INTO media_blobs (media_id, data, thumb_data) VALUES (?, ?, ?)")
+      .run(item.id, new Uint8Array(optimized.data), new Uint8Array(thumb));
+  });
 
   updateTag(MEDIA_TAG);
   return item;
@@ -154,6 +154,39 @@ export const getMediaById = async (id: string) => {
   const row = await db.prepare("SELECT * FROM media WHERE id = ?").get<MediaRow>(id);
   return row ? mapMedia(row) : null;
 };
+
+const toBytes = (value: unknown): Uint8Array | null => {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (Array.isArray(value)) return new Uint8Array(value);
+  return null;
+};
+
+/**
+ * Read an uploaded image (or its thumbnail) straight from the database.
+ * Returns null for rows created before blobs moved into the database — the
+ * API route then falls back to the legacy `data/uploads/` file.
+ */
+export async function getMediaFileByPath(
+  servedPath: string,
+): Promise<Uint8Array | null> {
+  const db = await getDb();
+  const row = await db
+    .prepare(
+      `SELECT m.path, m.thumb_path, b.data, b.thumb_data
+       FROM media m JOIN media_blobs b ON b.media_id = m.id
+       WHERE m.path = ? OR m.thumb_path = ?
+       LIMIT 1`,
+    )
+    .get<{
+      path: string;
+      thumb_path: string | null;
+      data: ArrayBuffer | Uint8Array;
+      thumb_data: ArrayBuffer | Uint8Array | null;
+    }>(servedPath, servedPath);
+  if (!row) return null;
+  return toBytes(row.path === servedPath ? row.data : row.thumb_data);
+}
 
 export async function updateMediaMeta(
   id: string,
@@ -221,8 +254,13 @@ export async function deleteMedia(id: string): Promise<void> {
   const thumbBase = item.thumbPath ? path.basename(item.thumbPath) : null;
 
   const db = await getDb();
-  await db.prepare("DELETE FROM media WHERE id = ?").run(id);
+  await db.transaction(async (tx) => {
+    await tx.prepare("DELETE FROM media_blobs WHERE media_id = ?").run(id);
+    await tx.prepare("DELETE FROM media WHERE id = ?").run(id);
+  });
 
+  // Legacy uploads may still have a file on disk (local dev / older volumes).
+  // Best-effort only: the database row is the source of truth now.
   await Promise.allSettled([
     fs.unlink(path.join(dir, fileBase)),
     thumbBase ? fs.unlink(path.join(dir, thumbBase)) : Promise.resolve(),
