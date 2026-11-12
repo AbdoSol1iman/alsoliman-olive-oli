@@ -64,8 +64,8 @@ export function CartView({
                 className="relative size-24 shrink-0 overflow-hidden bg-cream/60 md:size-32"
               >
                 <Image
-                  src={line.product.images[0].src}
-                  alt={locale === "ar" ? line.product.images[0].altAr : line.product.images[0].altEn}
+                  src={line.image.src}
+                  alt={locale === "ar" ? line.image.altAr : line.image.altEn}
                   fill
                   sizes="128px"
                   className="object-contain object-bottom p-2"

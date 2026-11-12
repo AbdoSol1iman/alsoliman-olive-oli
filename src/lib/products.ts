@@ -1,5 +1,7 @@
 export type Locale = "ar" | "en";
 
+export type ProductImage = { src: string; altAr: string; altEn: string };
+
 export type Variant = {
   id: string;
   sizeLabelAr: string;
@@ -13,9 +15,9 @@ export type Variant = {
   /** Unit cost entered by the owner. null = unknown (gross profit unavailable). */
   cost: number | null;
   sku: string;
+  /** Images unique to this size. Empty = use the product gallery. */
+  images: ProductImage[];
 };
-
-export type ProductImage = { src: string; altAr: string; altEn: string };
 
 export type ProductSpec = {
   labelAr: string;
@@ -74,6 +76,18 @@ export const getProduct = (products: Product[], slug: string) =>
 
 export const getVariant = (product: Product | undefined, variantId: string) =>
   product?.variants.find((v) => v.id === variantId) ?? null;
+
+/**
+ * The image a sellable size should show. A size with its own gallery wins;
+ * otherwise the product gallery is the fallback.
+ */
+export const getVariantImage = (product: Product, variant: Variant): ProductImage =>
+  variant.images?.[0] ??
+  product.images[0] ?? {
+    src: "/products/bottle-cutout.png",
+    altAr: product.nameAr,
+    altEn: product.nameEn,
+  };
 
 /** Every sellable line in the shop, used by the listing grid. */
 export type ListingItem = {

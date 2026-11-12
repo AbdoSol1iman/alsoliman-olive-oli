@@ -1068,6 +1068,8 @@ export async function getCustomerAnalytics(
 export type VariantPerformance = {
   id: string;
   name: string;
+  /** First image of this size, if it has its own gallery. */
+  image: string | null;
   orders: number;
   units: number;
   revenue: number;
@@ -1078,6 +1080,8 @@ export type ProductPerformance = {
   id: string;
   name: string;
   nameEn: string;
+  /** First product-level image, used as a fallback for its sizes. */
+  image: string | null;
   orders: number;
   cancelledOrders: number;
   units: number;
@@ -1094,7 +1098,15 @@ export type ProductPerformance = {
 
 export async function getProductPerformance(range: AnalyticsRange): Promise<ProductPerformance[]> {
   const db = await getDb();
-  const [productRows, variantRows, viewRows, spendRows, trackingCount] = await Promise.all([
+  const [
+    productRows,
+    variantRows,
+    viewRows,
+    spendRows,
+    trackingCount,
+    productImageRows,
+    variantImageRows,
+  ] = await Promise.all([
     db
       .prepare(
         `SELECT oi.product_id,
@@ -1149,18 +1161,44 @@ export async function getProductPerformance(range: AnalyticsRange): Promise<Prod
     db
       .prepare("SELECT COUNT(*) AS n FROM tracking_events WHERE created_at >= ? AND created_at <= ?")
       .get<{ n: number }>(dayStart(range.from), dayEnd(range.to)),
+    db
+      .prepare(
+        `SELECT product_id, src FROM product_images pi
+         WHERE pi.id = (
+           SELECT id FROM product_images x
+           WHERE x.product_id = pi.product_id
+           ORDER BY x.is_primary DESC, x.sort_order ASC, x.id ASC
+           LIMIT 1
+         )`,
+      )
+      .all<{ product_id: string; src: string }>(),
+    db
+      .prepare(
+        `SELECT variant_id, src FROM product_variant_images vi
+         WHERE vi.id = (
+           SELECT id FROM product_variant_images x
+           WHERE x.variant_id = vi.variant_id
+           ORDER BY x.sort_order ASC, x.id ASC
+           LIMIT 1
+         )`,
+      )
+      .all<{ variant_id: string; src: string }>(),
   ]);
 
   const viewMap = new Map(viewRows.map((row) => [row.product_id, row.sessions]));
   const spendMap = new Map(spendRows.map((row) => [row.product_id, row]));
+  const productImageMap = new Map(productImageRows.map((row) => [row.product_id, row.src]));
+  const variantImageMap = new Map(variantImageRows.map((row) => [row.variant_id, row.src]));
   const trackingActive = num(trackingCount?.n) > 0;
   const variantsByProduct = new Map<string, VariantPerformance[]>();
   for (const row of variantRows) {
     const productId = String(row.product_id);
+    const variantId = String(row.variant_id);
     const list = variantsByProduct.get(productId) ?? [];
     list.push({
-      id: String(row.variant_id),
+      id: variantId,
       name: String(row.size_ar),
+      image: variantImageMap.get(variantId) ?? null,
       orders: num(row.orders),
       units: num(row.units),
       revenue: num(row.revenue),
@@ -1180,6 +1218,7 @@ export async function getProductPerformance(range: AnalyticsRange): Promise<Prod
       id: productId,
       name: String(row.name_ar),
       nameEn: String(row.name_en),
+      image: productImageMap.get(productId) ?? null,
       orders,
       cancelledOrders: num(row.cancelled_orders),
       units: num(row.units),

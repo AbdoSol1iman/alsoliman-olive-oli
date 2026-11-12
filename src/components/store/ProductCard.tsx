@@ -9,7 +9,7 @@ import { useAddToCart } from "@/lib/catalog-client";
 import { trackEvent } from "@/lib/analytics";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
-import type { ListingItem, Locale } from "@/lib/products";
+import { getVariantImage, type ListingItem, type Locale } from "@/lib/products";
 
 const panelTone = (ml: number) =>
   ml <= 500 ? "bg-cream/75" : ml <= 750 ? "bg-sage/20" : "bg-gold-pale/30";
@@ -39,6 +39,7 @@ export function ProductCard({
     variant.stock <= (product.lowStockThreshold || 5);
   const name = locale === "ar" ? product.nameAr : product.nameEn;
   const size = locale === "ar" ? variant.sizeLabelAr : variant.sizeLabelEn;
+  const image = getVariantImage(product, variant);
 
   const onQuickAdd = () => {
     if (unavailable) return;
@@ -67,8 +68,8 @@ export function ProductCard({
             className="absolute inset-x-[14%] top-[9%] bottom-0 rounded-t-[999px] border border-gold/25 transition-colors duration-500 group-hover:border-gold/45"
           />
           <Image
-            src={product.images[0].src}
-            alt={locale === "ar" ? product.images[0].altAr : product.images[0].altEn}
+            src={image.src}
+            alt={locale === "ar" ? image.altAr : image.altEn}
             fill
             priority={priority}
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 28vw"

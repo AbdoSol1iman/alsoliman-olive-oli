@@ -477,7 +477,7 @@ export function CheckoutForm({
               <li key={line.key} className="flex gap-3">
                 <div className="relative size-14 shrink-0 overflow-hidden bg-ivory">
                   <Image
-                    src={line.product.images[0].src}
+                    src={line.image.src}
                     alt=""
                     fill
                     sizes="56px"

@@ -12,8 +12,10 @@ export const instant = false;
 export default async function AdminProductsPage() {
   await connection(); // admin renders per-request (session cookie)
   await requireAdmin();
-  // One catalog read — this page used to fetch the full catalog twice.
-  const { products, categories } = await readCatalogData();
+  // One catalog read — this page used to fetch the full catalog twice. Keep
+  // the synthetic fallback out so a size image can be shown when the product
+  // itself has no gallery.
+  const { products, categories } = await readCatalogData({ fallbackImage: false });
   const categoryName = (id: string | null) =>
     id ? (categories.find((c) => c.id === id)?.nameAr ?? "—") : "—";
 
@@ -66,7 +68,11 @@ export default async function AdminProductsPage() {
                     <div className="flex gap-3">
                       <span className="relative block size-14 shrink-0 overflow-hidden bg-cream/60">
                         <Image
-                          src={p.images[0]?.src ?? "/products/bottle-cutout.png"}
+                          src={
+                            p.images[0]?.src ??
+                            p.variants.find((v) => v.images.length > 0)?.images[0].src ??
+                            "/products/bottle-cutout.png"
+                          }
                           alt=""
                           fill
                           sizes="56px"

@@ -35,7 +35,10 @@ export function ProductDetail({
   const soldOut = variant.stock !== null && variant.stock <= 0;
   const unavailable = comingSoon || soldOut;
   const name = locale === "ar" ? product.nameAr : product.nameEn;
-  const images = product.images;
+  // Each size can own its gallery; sizes without one use the product gallery.
+  // Optional chaining keeps an older cached catalog safe during a deploy.
+  const images = variant.images?.length ? variant.images : product.images;
+  const activeImage = images[Math.min(imageIndex, images.length - 1)];
 
   useEffect(() => {
     trackEvent("ViewContent", {
@@ -68,9 +71,9 @@ export function ProductDetail({
             className="absolute inset-x-[14%] top-[8%] bottom-0 rounded-t-[999px] border border-gold/25"
           />
           <Image
-            key={images[imageIndex].src}
-            src={images[imageIndex].src}
-            alt={locale === "ar" ? images[imageIndex].altAr : images[imageIndex].altEn}
+            key={`${variant.id}:${activeImage.src}`}
+            src={activeImage.src}
+            alt={locale === "ar" ? activeImage.altAr : activeImage.altEn}
             fill
             priority
             sizes="(max-width: 1024px) 100vw, 46vw"
@@ -190,6 +193,7 @@ export function ProductDetail({
                   onClick={() => {
                     setVariant(v);
                     setQty(1);
+                    setImageIndex(0);
                   }}
                   aria-pressed={active}
                   className={cx(

@@ -15,6 +15,12 @@ const slugSchema = z
 
 const shortText = (max = 160) => z.string().trim().max(max);
 
+export const variantImageSchema = z.object({
+  src: z.string().trim().min(1).max(300),
+  altAr: z.string().trim().max(200).default(""),
+  altEn: z.string().trim().max(200).default(""),
+});
+
 export const productVariantSchema = z.object({
   id: z.string().trim().max(64).optional().default(""),
   sizeLabelAr: z.string().trim().min(1).max(40),
@@ -27,6 +33,8 @@ export const productVariantSchema = z.object({
   /** null / undefined = cost unknown → gross profit stays unavailable. */
   cost: z.coerce.number().int().min(0).max(10_000_000).nullable().default(null),
   sku: z.string().trim().max(64).default(""),
+  /** Images for this exact size. The first one is its storefront cover. */
+  images: z.array(variantImageSchema).max(12).default([]),
 });
 
 export const productImageSchema = z.object({

@@ -109,8 +109,8 @@ export function CartDrawer({
                     className="relative size-24 shrink-0 overflow-hidden rounded-xs bg-cream"
                   >
                     <Image
-                      src={line.product.images[0].src}
-                      alt={locale === "ar" ? line.product.images[0].altAr : line.product.images[0].altEn}
+                      src={line.image.src}
+                      alt={locale === "ar" ? line.image.altAr : line.image.altEn}
                       fill
                       sizes="96px"
                       className="object-cover"

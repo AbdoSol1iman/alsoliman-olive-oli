@@ -123,6 +123,16 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_images_product ON product_images(product_id);
 
+  CREATE TABLE IF NOT EXISTS product_variant_images (
+    id TEXT PRIMARY KEY,
+    variant_id TEXT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
+    src TEXT NOT NULL,
+    alt_ar TEXT NOT NULL DEFAULT '',
+    alt_en TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_variant_images_variant ON product_variant_images(variant_id);
+
   CREATE TABLE IF NOT EXISTS media (
     id TEXT PRIMARY KEY,
     path TEXT NOT NULL,
@@ -348,6 +358,26 @@ const MIGRATIONS: Migration[] = [
           "ALTER TABLE products ADD COLUMN coming_soon INTEGER NOT NULL DEFAULT 0",
         );
       }
+    },
+  },
+  {
+    id: "2026-11-12-variant-images",
+    run: async (db) => {
+      // Each sellable size can own its gallery instead of sharing the
+      // product-level images. ON DELETE CASCADE keeps the table tidy when a
+      // size is removed; the editor rewrites images on every product save.
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS product_variant_images (
+          id TEXT PRIMARY KEY,
+          variant_id TEXT NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
+          src TEXT NOT NULL,
+          alt_ar TEXT NOT NULL DEFAULT '',
+          alt_en TEXT NOT NULL DEFAULT '',
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_variant_images_variant
+          ON product_variant_images(variant_id);
+      `);
     },
   },
 ];

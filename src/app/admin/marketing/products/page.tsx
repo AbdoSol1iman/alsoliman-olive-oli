@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { connection } from "next/server";
@@ -29,6 +30,19 @@ export default async function ProductMarketingPage({
   const range = parseRange(params);
   const products = await getProductPerformance(range);
   const sorted = [...products].sort((a, b) => b.revenue - a.revenue);
+  // Each sellable size is its own row, with its own image and sales.
+  const variantRows = sorted
+    .flatMap((product) =>
+      product.variants.map((variant) => ({
+        ...variant,
+        productId: product.id,
+        productName: product.name,
+        productNameEn: product.nameEn,
+        image: variant.image ?? product.image,
+      })),
+    )
+    .sort((a, b) => b.revenue - a.revenue);
+  const soldSizes = variantRows.filter((variant) => variant.units > 0).length;
   const anyTracking = products.some((product) => product.views !== null);
   const top = sorted.slice(0, 8).map((product) => ({
     label: product.name,
@@ -85,8 +99,8 @@ export default async function ProductMarketingPage({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <div className="border border-gold/20 bg-ivory px-4 py-3">
-          <p className="text-[0.65rem] text-gold">المنتجات المباعة</p>
-          <p className="tnum mt-1 text-[1.05rem] text-forest">{products.length}</p>
+          <p className="text-[0.65rem] text-gold">الأحجام المباعة</p>
+          <p className="tnum mt-1 text-[1.05rem] text-forest">{soldSizes}</p>
         </div>
         <div className="border border-gold/20 bg-ivory px-4 py-3">
           <p className="text-[0.65rem] text-gold">الطلبات</p>
@@ -184,6 +198,64 @@ export default async function ProductMarketingPage({
                       </details>
                     )}
                   </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </AdminCard>
+
+      <AdminCard
+        title={`${variantRows.length} حجم/صنف`}
+        description="كل حجم يُتبع منفصلًا بصورته ومبيعاته. الإيراد من الطلبات غير الملغاة."
+        bodyClassName="p-0"
+      >
+        {variantRows.length === 0 ? (
+          <div className="p-5">
+            <EmptyState
+              title="لا توجد بيانات أحجام"
+              body="ستظهر الأحجام هنا بعد تسجيل طلبات تحتوي عليها."
+            />
+          </div>
+        ) : (
+          <Table className="border-0">
+            <thead>
+              <tr>
+                <Th>الحجم</Th>
+                <Th>المنتج</Th>
+                <Th>الطلبات</Th>
+                <Th>الوحدات</Th>
+                <Th>الإيراد</Th>
+                <Th>إيراد التوصيل</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gold/12 bg-ivory">
+              {variantRows.map((variant) => (
+                <tr key={`${variant.productId}:${variant.id}`} className="hover:bg-cream/30">
+                  <Td className="min-w-52">
+                    <div className="flex items-center gap-3">
+                      <span className="relative block size-11 shrink-0 overflow-hidden border border-gold/20 bg-cream/40">
+                        <Image
+                          src={variant.image ?? "/products/bottle-cutout.png"}
+                          alt=""
+                          fill
+                          sizes="44px"
+                          className="object-contain p-1"
+                        />
+                      </span>
+                      <span className="text-forest">{variant.name}</span>
+                    </div>
+                  </Td>
+                  <Td className="min-w-40">
+                    <p className="text-charcoal">{variant.productName}</p>
+                    <p className="mt-0.5 text-[0.66rem] text-ink-muted" dir="ltr">
+                      {variant.productNameEn}
+                    </p>
+                  </Td>
+                  <Td className="tnum">{variant.orders}</Td>
+                  <Td className="tnum">{variant.units}</Td>
+                  <Td className="tnum text-forest">{formatPrice(variant.revenue)}</Td>
+                  <Td className="tnum">{formatPrice(variant.deliveredRevenue)}</Td>
                 </tr>
               ))}
             </tbody>

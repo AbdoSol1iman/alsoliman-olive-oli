@@ -299,6 +299,15 @@ export default async function MarketingReportPage({
   } else if (reportSlug === "products") {
     const products = await getProductPerformance(range);
     const sorted = [...products].sort((a, b) => b.revenue - a.revenue);
+    const variantRows = sorted
+      .flatMap((product) =>
+        product.variants.map((variant) => ({
+          ...variant,
+          productId: product.id,
+          productName: product.name,
+        })),
+      )
+      .sort((a, b) => b.revenue - a.revenue);
     body = (
       <>
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
@@ -362,6 +371,21 @@ export default async function MarketingReportPage({
             ])}
             empty="لا توجد بيانات منتجات."
             minWidth={1050}
+          />
+        </AdminCard>
+        <AdminCard title="أداء الأحجام" bodyClassName="p-0">
+          <ReportTable
+            headers={["الحجم", "المنتج", "الطلبات", "الوحدات", "الإيراد", "إيراد التوصيل"]}
+            rows={variantRows.map((variant) => [
+              variant.name,
+              variant.productName,
+              variant.orders,
+              variant.units,
+              formatPrice(variant.revenue),
+              formatPrice(variant.deliveredRevenue),
+            ])}
+            empty="لا توجد بيانات أحجام."
+            minWidth={720}
           />
         </AdminCard>
       </>

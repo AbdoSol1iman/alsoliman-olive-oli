@@ -9,9 +9,9 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 const fail = (error: string) => ({ ok: false as const, error });
 
 const refresh = () => {
+  // Media lives in its own library. Revalidating the product editor here made
+  // Next re-render the open form after every upload, wiping unsaved edits.
   revalidatePath("/admin/media");
-  revalidatePath("/admin/products");
-  revalidatePath("/admin", "layout");
 };
 
 /**
@@ -32,7 +32,9 @@ export async function uploadMediaAction(
       altAr: String(formData.get("altAr") ?? ""),
       altEn: String(formData.get("altEn") ?? ""),
     });
-    refresh();
+    // No revalidatePath here: the picker reloads the media list itself, while
+    // any revalidation would re-render the open product form and drop its
+    // unsaved draft. Product pages are revalidated when the product is saved.
     return { ok: true, path: item.path, id: item.id };
   } catch (e) {
     const code = (e as Error).message;

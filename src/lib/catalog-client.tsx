@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useCartStore, type CartEntry } from "./cart-store";
-import type { Product, Variant } from "./products";
+import { getVariantImage, type Product, type ProductImage, type Variant } from "./products";
 
 /**
  * Client-side view of the catalog, hydrated from the server (which reads the
@@ -29,6 +29,8 @@ export type CartLine = CartEntry & {
   key: string;
   product: Product;
   variant: Variant;
+  /** This size's own image, or the product gallery fallback. */
+  image: ProductImage;
   lineTotal: number;
   maxQty: number | null;
 };
@@ -61,6 +63,7 @@ export const useCartLines = (): CartLine[] => {
           key: `${entry.productId}:${entry.variantId}`,
           product,
           variant,
+          image: getVariantImage(product, variant),
           lineTotal: variant.price * qty,
           maxQty: variant.stock,
         }];

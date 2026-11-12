@@ -60,6 +60,15 @@ type ImageRow = {
   is_primary: number;
 };
 
+type VariantImageRow = {
+  id: string;
+  variant_id: string;
+  src: string;
+  alt_ar: string;
+  alt_en: string;
+  sort_order: number;
+};
+
 const parseJson = <T>(raw: string, fallback: T): T => {
   try {
     const value = JSON.parse(raw);
@@ -73,6 +82,7 @@ function mapProduct(
   row: ProductRow,
   variants: VariantRow[],
   images: ImageRow[],
+  variantImages: Map<string, VariantImageRow[]>,
   categoryNames: Map<string, { ar: string; en: string }>,
   fallbackImage: boolean,
 ): Product {
@@ -103,6 +113,9 @@ function mapProduct(
       stock: v.stock,
       cost: v.cost ?? null,
       sku: v.sku,
+      images: (variantImages.get(v.id) ?? [])
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((img) => ({ src: img.src, altAr: img.alt_ar, altEn: img.alt_en })),
     }));
 
   return {
@@ -146,10 +159,10 @@ export async function readCatalogData(options: { fallbackImage?: boolean } = {})
   const fallbackImage = options.fallbackImage ?? true;
   const db = await getDb();
 
-  // Four queries, not 4×N: the remote database is over HTTP, so per-product
-  // round-trips would make every storefront render needlessly slow. All four
+  // Five queries, not 5×N: the remote database is over HTTP, so per-product
+  // round-trips would make every storefront render needlessly slow. All five
   // reads are independent, so they go out together instead of a waterfall.
-  const [categoryRows, productRows, variantRows, imageRows] = await Promise.all([
+  const [categoryRows, productRows, variantRows, imageRows, variantImageRows] = await Promise.all([
     db.prepare("SELECT * FROM categories ORDER BY sort_order, name_ar").all<{
       id: string;
       slug: string;
@@ -163,6 +176,9 @@ export async function readCatalogData(options: { fallbackImage?: boolean } = {})
       .prepare("SELECT * FROM product_variants ORDER BY sort_order, ml")
       .all<VariantRow>(),
     db.prepare("SELECT * FROM product_images ORDER BY sort_order").all<ImageRow>(),
+    db
+      .prepare("SELECT * FROM product_variant_images ORDER BY sort_order")
+      .all<VariantImageRow>(),
   ]);
 
   const categoryNames = new Map(
@@ -181,12 +197,19 @@ export async function readCatalogData(options: { fallbackImage?: boolean } = {})
     list.push(image);
     imagesByProduct.set(image.product_id, list);
   }
+  const imagesByVariant = new Map<string, VariantImageRow[]>();
+  for (const image of variantImageRows) {
+    const list = imagesByVariant.get(image.variant_id) ?? [];
+    list.push(image);
+    imagesByVariant.set(image.variant_id, list);
+  }
 
   const products = productRows.map((row) =>
     mapProduct(
       row,
       variantsByProduct.get(row.id) ?? [],
       imagesByProduct.get(row.id) ?? [],
+      imagesByVariant,
       categoryNames,
       fallbackImage,
     ),
@@ -296,14 +319,34 @@ function invalidateCatalog() {
 }
 
 async function writeVariants(tx: Db, productId: string, variants: ProductInput["variants"]) {
+  // Delete explicitly instead of relying on ON DELETE CASCADE: SQLite does not
+  // enforce foreign keys on every connection, and leftover image rows would
+  // duplicate the gallery after the sizes are re-inserted.
+  await tx
+    .prepare(
+      "DELETE FROM product_variant_images WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)",
+    )
+    .run(productId);
   await tx.prepare("DELETE FROM product_variants WHERE product_id = ?").run(productId);
   if (!variants.length) return;
+
+  // Keep explicit ids stable, and generate a collision-free id for a new size.
+  // (A newly added size can be moved above existing sizes; using its index
+  // alone could collide with an existing `product-vN` id.)
+  const usedIds = new Set<string>();
+  const ids = variants.map((v, index) => {
+    let candidate = v.id || `${productId}-v${index + 1}`;
+    let n = index + 1;
+    while (usedIds.has(candidate)) candidate = `${productId}-v${++n}`;
+    usedIds.add(candidate);
+    return candidate;
+  });
 
   // One multi-row INSERT instead of one round trip per variant — saves a
   // remote-database request per size in every product save.
   const placeholders = variants.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
   const args = variants.flatMap((v, index) => [
-    v.id || `${productId}-v${index + 1}`,
+    ids[index],
     productId,
     v.sizeLabelAr,
     v.sizeLabelEn,
@@ -321,6 +364,27 @@ async function writeVariants(tx: Db, productId: string, variants: ProductInput["
        VALUES ${placeholders}`,
     )
     .run(...args);
+
+  // Variant images are rewritten together with their size. The delete above
+  // clears the old rows, so what the editor sends is the full new state.
+  const imageRows = variants.flatMap((v, index) =>
+    v.images.map((img, imageIndex) => [
+      randomUUID(),
+      ids[index],
+      img.src,
+      img.altAr,
+      img.altEn,
+      imageIndex,
+    ]),
+  );
+  if (!imageRows.length) return;
+  const imagePlaceholders = imageRows.map(() => "(?, ?, ?, ?, ?, ?)").join(", ");
+  await tx
+    .prepare(
+      `INSERT INTO product_variant_images (id, variant_id, src, alt_ar, alt_en, sort_order)
+       VALUES ${imagePlaceholders}`,
+    )
+    .run(...imageRows.flat());
 }
 
 async function writeImages(tx: Db, productId: string, images: ProductInput["images"]) {
@@ -439,7 +503,16 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
 
 export async function deleteProduct(id: string): Promise<void> {
   const db = await getDb();
-  await db.prepare("DELETE FROM products WHERE id = ?").run(id);
+  await db.transaction(async (tx) => {
+    // Clear size images explicitly for the same reason as writeVariants:
+    // do not depend on foreign-key cascades being enabled.
+    await tx
+      .prepare(
+        "DELETE FROM product_variant_images WHERE variant_id IN (SELECT id FROM product_variants WHERE product_id = ?)",
+      )
+      .run(id);
+    await tx.prepare("DELETE FROM products WHERE id = ?").run(id);
+  });
   invalidateCatalog();
 }
 

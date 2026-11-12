@@ -11,7 +11,6 @@ import { MediaPicker } from "./MediaPicker";
 import {
   AdminCard,
   ConfirmSubmit,
-  Field,
   FormMessage,
   MiniButton,
   SelectField,
@@ -24,10 +23,8 @@ import {
 } from "./ui";
 
 type VariantDraft = ProductInput["variants"][number];
-type ImageDraft = ProductInput["images"][number];
-type SpecDraft = ProductInput["specs"][number];
 
-const newVariant = (n: number): VariantDraft => ({
+const newVariant = (): VariantDraft => ({
   id: "",
   sizeLabelAr: "",
   sizeLabelEn: "",
@@ -37,6 +34,7 @@ const newVariant = (n: number): VariantDraft => ({
   stock: null,
   cost: null,
   sku: "",
+  images: [],
 });
 
 const emptyDraft = (): ProductInput => ({
@@ -61,7 +59,7 @@ const emptyDraft = (): ProductInput => ({
   sample: false,
   sortOrder: 0,
   lowStockThreshold: 5,
-  variants: [newVariant(1)],
+  variants: [newVariant()],
   images: [],
 });
 
@@ -97,6 +95,11 @@ const fromProduct = (p: Product): ProductInput => ({
     stock: v.stock,
     cost: v.cost,
     sku: v.sku,
+    images: v.images.map((img) => ({
+      src: img.src,
+      altAr: img.altAr,
+      altEn: img.altEn,
+    })),
   })),
   // The editor works with real images only (no synthetic fallback).
   images: p.images
@@ -209,6 +212,31 @@ export function ProductForm({
       images: d.images.map((img, i) => ({ ...img, isPrimary: i === index })),
     }));
 
+  const addVariantImage = (variantIndex: number, src: string) =>
+    setDraft((d) => {
+      const variants = [...d.variants];
+      const variant = variants[variantIndex];
+      variants[variantIndex] = {
+        ...variant,
+        images: [
+          ...variant.images,
+          { src, altAr: d.nameAr, altEn: d.nameEn },
+        ].slice(0, 12),
+      };
+      return { ...d, variants };
+    });
+
+  const removeVariantImage = (variantIndex: number, imageIndex: number) =>
+    setDraft((d) => {
+      const variants = [...d.variants];
+      const variant = variants[variantIndex];
+      variants[variantIndex] = {
+        ...variant,
+        images: variant.images.filter((_, i) => i !== imageIndex),
+      };
+      return { ...d, variants };
+    });
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pending) return;
@@ -226,6 +254,11 @@ export function ProductForm({
         ...v,
         compareAt: v.compareAt !== null && v.compareAt > 0 ? v.compareAt : null,
         stock: v.stock !== null && v.stock >= 0 ? v.stock : null,
+        images: v.images.map((img) => ({
+          ...img,
+          altAr: img.altAr || draft.nameAr,
+          altEn: img.altEn || draft.nameEn,
+        })),
       })),
       images: draft.images.map((img) => ({ ...img, altAr: img.altAr || draft.nameAr, altEn: img.altEn || draft.nameEn })),
     };
@@ -384,7 +417,7 @@ export function ProductForm({
         title="الأحجام والأسعار"
         description="كل حجم = SKU مستقل بسعره ومخزونه. استخدم الأسهم لتغيير ترتيب ظهور الأحجام في المتجر — الترتيب هنا هو الترتيب المعروض."
         action={
-          <MiniButton onClick={() => set("variants", [...draft.variants, newVariant(draft.variants.length + 1)])}>
+          <MiniButton onClick={() => set("variants", [...draft.variants, newVariant()])}>
             + حجم
           </MiniButton>
         }
@@ -532,6 +565,43 @@ export function ProductForm({
                     حذف الحجم
                   </MiniButton>
                 </div>
+              </div>
+
+              {/* per-size images */}
+              <div className="md:col-span-12 border-t border-gold/15 pt-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[0.72rem] text-forest">صور هذا الحجم</span>
+                  {v.images.map((img, imageIndex) => (
+                    <span
+                      key={`${img.src}-${imageIndex}`}
+                      className="relative block size-16 overflow-hidden border border-gold/20 bg-ivory"
+                    >
+                      <Image
+                        src={img.src}
+                        alt=""
+                        fill
+                        sizes="64px"
+                        className="object-contain p-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeVariantImage(i, imageIndex)}
+                        aria-label="حذف صورة الحجم"
+                        className="absolute end-0 top-0 grid size-5 place-items-center bg-forest/85 text-[0.62rem] text-ivory"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <MediaPicker
+                    onSelect={(src) => addVariantImage(i, src)}
+                    triggerLabel="+ صورة"
+                  />
+                </div>
+                <p className="mt-1.5 text-[0.68rem] leading-5 text-ink-muted">
+                  الصورة الأولى تظهر في بطاقة هذا الحجم وصفحة المنتج. بدون صور يستخدم
+                  هذا الحجم صور المنتج.
+                </p>
               </div>
             </div>
           ))}

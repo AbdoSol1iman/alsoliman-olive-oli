@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
+import { createPortal } from "react-dom";
 import { listMediaAction, uploadMediaAction } from "@/app/actions/media";
 import type { MediaItem } from "@/lib/media-shared";
 import { MEDIA_CATEGORIES } from "@/lib/media-shared";
@@ -35,7 +36,6 @@ export function MediaPicker({
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [, startTransition] = useTransition();
 
   const load = async () => {
     setLoading(true);
@@ -50,10 +50,12 @@ export function MediaPicker({
     }
   };
 
-  useEffect(() => {
-    if (open && items.length === 0 && !loading) void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  const openPicker = () => {
+    setOpen(true);
+    // Load on open from the event handler (not an effect) so the first paint
+    // is not followed by a cascading state update.
+    if (items.length === 0 && !loading) void load();
+  };
 
   const pick = (path: string) => {
     onSelect(path);
@@ -62,6 +64,10 @@ export function MediaPicker({
 
   const onUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // The picker is portaled to <body>, but React events still bubble through
+    // the component tree. Without this, uploading from inside the product
+    // editor also submits (and saves) the product form behind the modal.
+    e.stopPropagation();
     if (uploading) return;
     setError("");
     const form = e.currentTarget;
@@ -94,7 +100,7 @@ export function MediaPicker({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openPicker}
         className={cx(
           "flex items-center gap-3 border border-forest/20 bg-cream/30 px-3 py-2 text-[0.78rem] text-forest transition-colors hover:border-forest/50",
         )}
@@ -107,7 +113,8 @@ export function MediaPicker({
         <span>{current ? "تغيير الصورة" : triggerLabel}</span>
       </button>
 
-      {open ? (
+      {open
+        ? createPortal(
         <div className="fixed inset-0 z-[70] flex items-end justify-center p-0 sm:items-center sm:p-6">
           <button
             type="button"
@@ -225,8 +232,10 @@ export function MediaPicker({
               )}
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+          document.body,
+        )
+        : null}
     </>
   );
 }

@@ -94,11 +94,17 @@ async function ProductBody({
         "@type": "Product",
         name: isAr ? product.nameAr : product.nameEn,
         description: isAr ? product.hookAr : product.hookEn,
-        image: product.images.map((i) => i.src),
+        image: [
+          ...new Set([
+            ...product.images.map((i) => i.src),
+            ...product.variants.flatMap((v) => (v.images ?? []).map((i) => i.src)),
+          ]),
+        ],
         brand: { "@type": "Brand", name: "Alsuliman" },
         offers: product.variants.map((v) => ({
           "@type": "Offer",
           sku: v.sku,
+          image: v.images?.[0]?.src ?? product.images[0]?.src,
           priceCurrency: "EGP",
           price: v.price,
           availability:
