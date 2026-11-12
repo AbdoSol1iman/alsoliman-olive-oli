@@ -5,7 +5,7 @@ import { ProductCard } from "@/components/store/ProductCard";
 import { ButtonLink } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { ArrowEnd, Leaf, Ruler, Shield, Sparkle } from "@/components/ui/Icons";
+import { ArrowEnd, Leaf, Plus, Ruler, Shield, Sparkle } from "@/components/ui/Icons";
 import type { ListingItem } from "@/lib/products";
 import type { Dictionary, OfferItem } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
@@ -67,7 +67,7 @@ export function OffersSection({ locale, dict }: { locale: Locale; dict: Dictiona
               delay={i * 80}
               className="w-full sm:w-[calc(50%-0.625rem)] lg:w-[calc(33.333%-0.834rem)]"
             >
-              <OfferCard offer={offer} locale={locale} />
+              <OfferCard offer={offer} locale={locale} dict={dict} />
             </Reveal>
           ))}
         </ul>
@@ -76,7 +76,18 @@ export function OffersSection({ locale, dict }: { locale: Locale; dict: Dictiona
   );
 }
 
-function OfferCard({ offer, locale }: { offer: OfferItem; locale: Locale }) {
+function OfferCard({
+  offer,
+  locale,
+  dict,
+}: {
+  offer: OfferItem;
+  locale: Locale;
+  dict: Dictionary;
+}) {
+  const ctaLabel = offer.cta?.trim() || dict.common.addToCart;
+  const href = offer.href?.trim() || `/${locale}/shop`;
+
   const inner = (
     <>
       <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-cream via-ivory to-gold/20">
@@ -101,15 +112,12 @@ function OfferCard({ offer, locale }: { offer: OfferItem; locale: Locale }) {
         {offer.subtitle ? (
           <p className="mt-2 text-[0.82rem] leading-7 text-ink-muted">{offer.subtitle}</p>
         ) : null}
-        {offer.cta ? (
-          <span className="mt-auto inline-flex items-center gap-2 pt-5 text-[0.78rem] text-forest">
-            <span className="link-underline">{offer.cta}</span>
-            <ArrowEnd
-              size={14}
-              className="text-gold transition-transform duration-500 group-hover:-translate-x-1 rtl:rotate-180 rtl:group-hover:translate-x-1"
-            />
+        <div className="mt-auto pt-5">
+          <span className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xs border border-forest/20 text-[0.8rem] tracking-wide text-forest transition-all duration-300 group-hover:border-forest group-hover:bg-forest group-hover:text-ivory">
+            <Plus size={15} />
+            <span>{ctaLabel}</span>
           </span>
-        ) : null}
+        </div>
       </div>
     </>
   );
@@ -117,8 +125,8 @@ function OfferCard({ offer, locale }: { offer: OfferItem; locale: Locale }) {
   const className =
     "group flex h-full flex-col overflow-hidden border border-gold/20 bg-ivory transition-colors hover:border-forest/40";
 
-  return offer.href ? (
-    <Link href={offer.href} className={className}>
+  return href ? (
+    <Link href={href} className={className}>
       {inner}
     </Link>
   ) : (

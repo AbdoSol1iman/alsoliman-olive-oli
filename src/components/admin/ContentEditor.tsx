@@ -168,6 +168,7 @@ function Fields({
     const key = String(path[path.length - 1] ?? "القائمة");
     const objectRows = value.length > 0 && typeof value[0] === "object" && value[0] !== null && !Array.isArray(value[0]);
     const addsObject = objectRows || (value.length === 0 && newItem !== undefined);
+    const itemLabel = key === "items" || key === "cards" ? "بطاقة" : addsObject ? "عنصر" : "بند";
     return (
       <fieldset className="border border-gold/20 bg-cream/20 p-3.5">
         <legend className="px-1.5 text-[0.75rem] text-forest">
@@ -178,7 +179,7 @@ function Fields({
             <div key={i} className={cx(objectRows && "border border-gold/15 bg-ivory p-3")}>
               {objectRows ? (
                 <div className="mb-2.5 flex items-center justify-between">
-                  <span className="text-[0.66rem] tracking-[0.16em] text-gold">عنصر {i + 1}</span>
+                  <span className="text-[0.66rem] tracking-[0.16em] text-gold">{itemLabel} {i + 1}</span>
                   <MiniButton
                     onClick={() => onChange(path, value.filter((_: Json, j: number) => j !== i))}
                     className="border-red-900/30 text-red-900 hover:bg-red-900 hover:text-ivory"
@@ -221,7 +222,7 @@ function Fields({
             onClick={() => onChange(path, [...value, emptyItem(value[0] ?? newItem)])}
             className="border-forest/40"
           >
-            + إضافة {addsObject ? "عنصر" : "بند"}
+            + إضافة {itemLabel}
           </MiniButton>
         </div>
       </fieldset>
@@ -260,6 +261,8 @@ export type EditorSection = {
   };
   /** Shape for the first row when an object array starts empty. */
   itemTemplate?: Json;
+  /** Shape for the first row when an object array starts empty (per locale). */
+  itemTemplates?: { ar: Json; en: Json };
 };
 
 /**
@@ -397,7 +400,7 @@ export function ContentSections({ sections }: { sections: EditorSection[] }) {
             value={bilingual ? currentValue?.[locale] : currentValue}
             path={rootPath}
             onChange={change}
-            newItem={active.itemTemplate}
+            newItem={active.itemTemplates?.[locale] ?? active.itemTemplate}
           />
         </div>
 

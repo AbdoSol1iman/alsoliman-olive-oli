@@ -29,7 +29,7 @@ export default async function AdminHomepagePage() {
     {
       key: "offers",
       title: "العروض",
-      description: "بطاقات العروض التي تظهر أعلى قسم المنتجات — لكل عرض عنوان وصورة ورابط وزر.",
+      description: "بطاقات العروض التي تظهر أسفل قسم المنتجات — لكل عرض عنوان وصورة ورابط وزر.",
       initial: content.offers,
       itemTemplate: { title: "", subtitle: "", image: "", href: "", cta: "", enabled: true },
     },

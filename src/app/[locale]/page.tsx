@@ -53,13 +53,13 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
     <>
       <Hero locale={locale} dict={dict} image={extras.media.heroImage || undefined} />
       <TrustStrip dict={dict} />
-      <OffersSection locale={locale} dict={dict} />
       <FeaturedProducts
         locale={locale}
         dict={dict}
         items={featured}
         sampleCatalog={settings.flags.sampleCatalog}
       />
+      <OffersSection locale={locale} dict={dict} />
       <StorySection locale={locale} dict={dict} image={extras.media.storyImage || undefined} />
       <WhySection locale={locale} dict={dict} image={extras.media.whyImage || undefined} />
       <CulinarySection dict={dict} />
