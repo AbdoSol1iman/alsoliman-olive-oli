@@ -128,7 +128,13 @@ const mergeDeep = <T>(base: T, override: unknown): T => {
   if (typeof override !== "object") return base;
   const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
   for (const [key, value] of Object.entries(override)) {
-    out[key] = mergeDeep((base as Record<string, unknown>)[key], value);
+    // Zones is a user-editable collection where items can be added, updated, or deleted.
+    // Deep-merging would preserve deleted zones instead of removing them.
+    if (key === "zones" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+      out[key] = value;
+    } else {
+      out[key] = mergeDeep((base as Record<string, unknown>)[key], value);
+    }
   }
   return out as T;
 };

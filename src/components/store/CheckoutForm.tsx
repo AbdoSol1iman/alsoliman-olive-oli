@@ -357,7 +357,7 @@ export function CheckoutForm({
                     <option value="">{dict.checkout.governoratePlaceholder}</option>
                     {zones.map(([key, zone]) => (
                       <option key={key} value={key}>
-                        {locale === "ar" ? zone.ar : zone.en} — {formatPrice(zone.fee, locale)}
+                        {(locale === "ar" ? zone.ar : zone.en) || zone.ar} — {formatPrice(zone.fee, locale)}
                       </option>
                     ))}
                   </select>

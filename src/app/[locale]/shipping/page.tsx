@@ -91,7 +91,7 @@ export default async function ShippingPage({ params }: { params: Promise<{ local
                   {zones.map(([key, zone]) => (
                     <tr key={key} className="transition-colors hover:bg-cream/40">
                       <th scope="row" className="px-4 py-3 text-start font-normal text-forest">
-                        {isAr ? zone.ar : zone.en}
+                        {(isAr ? zone.ar : zone.en) || zone.ar}
                       </th>
                       <td className="tnum px-4 py-3 text-ink-muted">{formatPrice(zone.fee, locale)}</td>
                       <td className="px-4 py-3 text-ink-muted">

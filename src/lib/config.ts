@@ -67,41 +67,16 @@ export const shipping = {
   wholesaleMinQty: 12,
   codFee: 0,
   zones: {
-    cairo: { ar: "القاهرة", en: "Cairo", fee: 60, days: "1–2" },
-    giza: { ar: "الجيزة", en: "Giza", fee: 60, days: "1–2" },
-    alexandria: { ar: "الإسكندرية", en: "Alexandria", fee: 70, days: "2–3" },
-    qalyubia: { ar: "القليوبية", en: "Qalyubia", fee: 65, days: "2–3" },
-    dakahlia: { ar: "الدقهلية", en: "Dakahlia", fee: 75, days: "2–4" },
-    sharqia: { ar: "الشرقية", en: "Sharqia", fee: 75, days: "2–4" },
-    gharbia: { ar: "الغربية", en: "Gharbia", fee: 75, days: "2–4" },
-    monufia: { ar: "المنوفية", en: "Monufia", fee: 75, days: "2–4" },
-    beheira: { ar: "البحيرة", en: "Beheira", fee: 80, days: "3–4" },
-    kafrElSheikh: { ar: "كفر الشيخ", en: "Kafr El-Sheikh", fee: 80, days: "3–4" },
-    damietta: { ar: "دمياط", en: "Damietta", fee: 80, days: "3–4" },
-    portSaid: { ar: "بورسعيد", en: "Port Said", fee: 80, days: "3–4" },
-    ismailia: { ar: "الإسماعيلية", en: "Ismailia", fee: 80, days: "3–4" },
-    suez: { ar: "السويس", en: "Suez", fee: 80, days: "3–4" },
-    fayoum: { ar: "الفيوم", en: "Fayoum", fee: 85, days: "3–5" },
-    beniSuef: { ar: "بني سويف", en: "Beni Suef", fee: 85, days: "3–5" },
-    minya: { ar: "المنيا", en: "Minya", fee: 95, days: "3–5" },
-    asyut: { ar: "أسيوط", en: "Asyut", fee: 95, days: "4–5" },
-    sohag: { ar: "سوهاج", en: "Sohag", fee: 100, days: "4–6" },
-    qena: { ar: "قنا", en: "Qena", fee: 100, days: "4–6" },
-    luxor: { ar: "الأقصر", en: "Luxor", fee: 105, days: "4–6" },
-    aswan: { ar: "أسوان", en: "Aswan", fee: 110, days: "5–7" },
-    redSea: { ar: "البحر الأحمر", en: "Red Sea", fee: 120, days: "5–7" },
-    newValley: { ar: "الوادي الجديد", en: "New Valley", fee: 130, days: "5–8" },
-    matrouh: { ar: "مطروح", en: "Matrouh", fee: 115, days: "5–7" },
-    northSinai: { ar: "شمال سيناء", en: "North Sinai", fee: 130, days: "5–8" },
-    southSinai: { ar: "جنوب سيناء", en: "South Sinai", fee: 130, days: "5–8" },
-  },
+    mansoura: { ar: "داخل مدينة المنصورة", en: "Mansoura City", fee: 0, days: "1" },
+    dakahliya: { ar: "باقي مدن الدقهلية", en: "Rest of Dakahlia", fee: 1, days: "1" },
+  } as Record<string, { ar: string; en: string; fee: number; days: string }>,
   defaultFee: 90,
   /** Delivery notes shown at checkout — confirm with the owner. */
-  notesAr: "يتم تجهيز الطلب خلال ١–٢ يوم عمل، وقد يتغير موعد التوصيل قليلًا حسب المحافظة.",
+  notesAr: "خارج نطاق مدينة المنصوره : يتم تحديد السعر والمده حسب المدينة والقرية",
   notesEn: "Orders are prepared within 1–2 business days; delivery time may vary slightly by governorate.",
 };
 
-export type ZoneKey = keyof typeof shipping.zones;
+export type ZoneKey = string;
 
 /** Total bottles in an order — the input for the wholesale check. */
 export type FeeContext = { governorate: ZoneKey; totalQty: number };

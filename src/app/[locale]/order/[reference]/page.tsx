@@ -49,7 +49,7 @@ export default async function OrderPage({
   const { order, items } = result;
   const isAr = locale === "ar";
   const zone = order.governorate;
-  const govLabel = isAr ? settings.shipping.zones[zone]?.ar : settings.shipping.zones[zone]?.en;
+  const govLabel = (isAr ? settings.shipping.zones[zone]?.ar : settings.shipping.zones[zone]?.en) || settings.shipping.zones[zone]?.ar || order.governorate;
 
   // Rebuilt from the stored order on every render: the link is complete
   // (name, phone, address, items, totals, reference) and survives a reload.
