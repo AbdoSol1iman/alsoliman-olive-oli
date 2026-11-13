@@ -128,8 +128,11 @@ export function CheckoutForm({
         productId: l.productId,
         variantId: l.variantId,
         qty: l.qty,
-        unitPrice: l.unitPrice,
-        offerTitle: l.offerTitle,
+        isOffer: Boolean(l.isOffer),
+        offerTitle: l.isOffer ? (locale === "ar" ? l.product.nameAr : l.product.nameEn) : undefined,
+        offerSubtitle: l.isOffer ? (locale === "ar" ? l.variant.sizeLabelAr : l.variant.sizeLabelEn) : undefined,
+        offerPrice: l.isOffer ? l.unitPrice : undefined,
+        productIds: l.offer?.productIds || undefined,
       })),
     });
 

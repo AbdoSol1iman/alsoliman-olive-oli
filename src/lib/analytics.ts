@@ -215,90 +215,104 @@ const integrationParams = (name: AnalyticsEventName, options: EventOptions) => {
 /** Send to the internal store + any configured Meta/GA4/GTM endpoints. */
 export function trackEvent(name: AnalyticsEventName, options: EventOptions = {}) {
   if (typeof window === "undefined") return;
-  const context = captureAttribution();
-  if (!context) return;
 
-  const path = options.path ?? `${window.location.pathname}${window.location.search}`;
-  const eventId =
-    options.eventId ??
-    (name === "PageView"
-      ? `pv:${context.sessionId}:${window.location.pathname}`
-      : name === "ViewContent" && options.productId
-        ? `vc:${context.sessionId}:${options.productId}:${options.variantId ?? ""}`
-        : name === "InitiateCheckout"
-          ? `ic:${context.sessionId}`
-          : name === "Purchase" && options.orderReference
-            ? `purchase:${options.orderReference}`
-            : name === "WhatsAppOpened" && options.orderReference
-              ? `wa:${options.orderReference}`
-              : `ev:${uuid()}`);
+  const dispatch = () => {
+    try {
+      const context = captureAttribution();
+      if (!context) return;
 
-  const payload = {
-    id: eventId,
-    eventName: name,
-    path: path.slice(0, 500),
-    productId: options.productId ?? null,
-    variantId: options.variantId ?? null,
-    orderReference: options.orderReference ?? null,
-    value: options.value ?? null,
-    currency: options.currency ?? "EGP",
-    metadata: options.metadata ?? {},
-    attribution: context,
-  };
+      const path = options.path ?? `${window.location.pathname}${window.location.search}`;
+      const eventId =
+        options.eventId ??
+        (name === "PageView"
+          ? `pv:${context.sessionId}:${window.location.pathname}`
+          : name === "ViewContent" && options.productId
+            ? `vc:${context.sessionId}:${options.productId}:${options.variantId ?? ""}`
+            : name === "InitiateCheckout"
+              ? `ic:${context.sessionId}`
+              : name === "Purchase" && options.orderReference
+                ? `purchase:${options.orderReference}`
+                : name === "WhatsAppOpened" && options.orderReference
+                  ? `wa:${options.orderReference}`
+                  : `ev:${uuid()}`);
 
-  try {
-    const body = JSON.stringify(payload);
-    const sent = navigator.sendBeacon?.(
-      "/api/track",
-      new Blob([body], { type: "application/json" }),
-    );
-    if (!sent) {
-      void fetch("/api/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body,
-        keepalive: true,
-      }).catch(() => undefined);
+      const payload = {
+        id: eventId,
+        eventName: name,
+        path: path.slice(0, 500),
+        productId: options.productId ?? null,
+        variantId: options.variantId ?? null,
+        orderReference: options.orderReference ?? null,
+        value: options.value ?? null,
+        currency: options.currency ?? "EGP",
+        metadata: options.metadata ?? {},
+        attribution: context,
+      };
+
+      try {
+        const body = JSON.stringify(payload);
+        const sent = navigator.sendBeacon?.(
+          "/api/track",
+          new Blob([body], { type: "application/json" }),
+        );
+        if (!sent) {
+          void fetch("/api/track", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: true,
+          }).catch(() => undefined);
+        }
+      } catch {
+        // analytics must never break the store
+      }
+
+      const params = integrationParams(name, options);
+      const gtmEvent = `alsuliman_${name}`;
+      const gaParams: Record<string, unknown> = {
+        ...params,
+        event_id: eventId,
+      };
+      if (options.productId) {
+        gaParams.items = [
+          {
+            item_id: options.variantId || options.productId,
+            item_variant: options.variantId || undefined,
+          },
+        ];
+      }
+
+      type Fbq = (...args: unknown[]) => void;
+      type Gtag = (...args: unknown[]) => void;
+      const w = window as unknown as {
+        fbq?: Fbq;
+        gtag?: Gtag;
+        dataLayer?: unknown[];
+      };
+
+      if (GTM_ID && w.dataLayer) {
+        w.dataLayer.push({ event: gtmEvent, ga4_event: ga4Event(name), event_id: eventId, ...params });
+      }
+
+      if (GA4_ID && w.gtag) {
+        w.gtag("event", ga4Event(name), gaParams);
+      }
+
+      const standard = metaEvent(name);
+      if (META_PIXEL_ID && w.fbq && standard) {
+        w.fbq("track", standard, params, { eventID: eventId });
+      } else if (META_PIXEL_ID && w.fbq) {
+        w.fbq("trackCustom", name, params, { eventID: eventId });
+      }
+    } catch {
+      // analytics must never break the store
     }
-  } catch {
-    // analytics must never break the store
-  }
-
-  const params = integrationParams(name, options);
-  const gtmEvent = `alsuliman_${name}`;
-  const gaParams: Record<string, unknown> = {
-    ...params,
-    event_id: eventId,
-  };
-  if (options.productId) {
-    gaParams.items = [
-      {
-        item_id: options.variantId || options.productId,
-        item_variant: options.variantId || undefined,
-      },
-    ];
-  }
-
-  type Fbq = (...args: unknown[]) => void;
-  type Gtag = (...args: unknown[]) => void;
-  const w = window as unknown as {
-    fbq?: Fbq;
-    gtag?: Gtag;
-    dataLayer?: unknown[];
   };
 
-  if (GTM_ID && w.dataLayer) {
-    w.dataLayer.push({ event: gtmEvent, ga4_event: ga4Event(name), event_id: eventId, ...params });
-  }
-
-  if (GA4_ID && w.gtag) {
-    w.gtag("event", ga4Event(name), gaParams);
-  }
-
-  const standard = metaEvent(name);
-  if (META_PIXEL_ID && w.fbq && standard) {
-    w.fbq("track", standard, params, { eventID: eventId });
-  } else if (META_PIXEL_ID && w.fbq) {
-    w.fbq("trackCustom", name, params, { eventID: eventId });
+  // Offload from critical input path to prevent blocking UI updates
+  if (typeof queueMicrotask === "function") {
+    queueMicrotask(dispatch);
+  } else {
+    setTimeout(dispatch, 0);
   }
 }

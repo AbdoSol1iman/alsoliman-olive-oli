@@ -20,6 +20,33 @@ const navKeys: Record<string, keyof Dictionary["nav"]> = {
   contact: "contact",
 };
 
+function CartButton({
+  dict,
+  onClick,
+}: {
+  dict: Dictionary;
+  onClick: () => void;
+}) {
+  const count = useCartCount();
+  const mounted = useHydrated();
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${dict.common.cart}${mounted && count > 0 ? ` (${count})` : ""}`}
+      className="relative grid size-10 place-items-center rounded-full text-forest transition-colors hover:bg-cream/70"
+    >
+      <Bag size={20} />
+      {mounted && count > 0 ? (
+        <span className="tnum absolute -top-0.5 -end-0.5 grid min-w-[18px] place-items-center rounded-full bg-forest px-1 text-[0.6rem] font-semibold leading-[18px] text-ivory">
+          {count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 export function Header({
   locale,
   dict,
@@ -34,9 +61,7 @@ export function Header({
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const count = useCartCount();
   const openCart = useCartStore((s) => s.open);
-  const mounted = useHydrated();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -55,8 +80,11 @@ export function Header({
   }
 
   useEffect(() => {
-    document.documentElement.style.overflow = menuOpen || searchOpen ? "hidden" : "";
+    const frameId = requestAnimationFrame(() => {
+      document.documentElement.style.overflow = menuOpen || searchOpen ? "hidden" : "";
+    });
     return () => {
+      cancelAnimationFrame(frameId);
       document.documentElement.style.overflow = "";
     };
   }, [menuOpen, searchOpen]);
@@ -128,19 +156,7 @@ export function Header({
               {dict.common.language}
             </Link>
 
-            <button
-              type="button"
-              onClick={openCart}
-              aria-label={`${dict.common.cart}${mounted && count > 0 ? ` (${count})` : ""}`}
-              className="relative grid size-10 place-items-center rounded-full text-forest transition-colors hover:bg-cream/70"
-            >
-              <Bag size={20} />
-              {mounted && count > 0 ? (
-                <span className="tnum absolute -top-0.5 -end-0.5 grid min-w-[18px] place-items-center rounded-full bg-forest px-1 text-[0.6rem] font-semibold leading-[18px] text-ivory">
-                  {count}
-                </span>
-              ) : null}
-            </button>
+            <CartButton dict={dict} onClick={openCart} />
 
             <button
               type="button"

@@ -50,7 +50,7 @@ export function buildOrderWhatsAppMessage(
   locale: Locale,
 ): string {
   const detailLines = items.flatMap((item, index) => [
-    `${index + 1}. ${item.name} (${item.size})`,
+    `${index + 1}. ${item.name}${item.size ? ` (${item.size})` : ""}`,
     locale === "ar" ? `   الكمية: ${item.qty}` : `   Qty: ${item.qty}`,
     locale === "ar"
       ? `   سعر الوحدة: ${money(item.unitPrice, locale)}`
@@ -112,7 +112,7 @@ export type ConfirmedOrder = {
  */
 export function buildConfirmedOrderMessage(order: ConfirmedOrder, locale: Locale): string {
   const itemLines = order.items.flatMap((item, index) => [
-    `${index + 1}. ${item.name} (${item.size})`,
+    `${index + 1}. ${item.name}${item.size ? ` (${item.size})` : ""}`,
     locale === "ar" ? `   الكمية: ${item.qty}` : `   Qty: ${item.qty}`,
     locale === "ar"
       ? `   سعر الوحدة: ${money(item.unitPrice, locale)}`

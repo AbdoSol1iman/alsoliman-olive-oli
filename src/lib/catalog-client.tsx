@@ -34,7 +34,6 @@ export type CartLine = CartEntry & {
   unitPrice: number;
   lineTotal: number;
   maxQty: number | null;
-  offerTitle?: string;
 };
 
 const clampQty = (qty: number, stock: number | null) => {
@@ -51,10 +50,91 @@ export const useCartLines = (): CartLine[] => {
 
   return useMemo(
     () =>
-      items.flatMap((entry) => {
-        // Resolve by variant id, not the stored product id: carts created
-        // before the size split still carry the old product id, but the
-        // variant id is globally unique and always points at its new product.
+      items.flatMap((entry): CartLine[] => {
+        if (entry.isOffer && entry.offer) {
+          const offer = entry.offer;
+          const lineKey = entry.key || `offer:${offer.id || offer.title}`;
+          const price = Number(offer.price) || 0;
+          let maxQty: number | null = null;
+          if (Array.isArray(offer.productIds) && offer.productIds.length > 0) {
+            for (const id of offer.productIds) {
+              const p = products.find(
+                (prod) =>
+                  prod.variants.some((v) => v.id === id) || prod.id === id,
+              );
+              const v = p?.variants.find((v) => v.id === id) || p?.variants[0];
+              if (v && v.stock !== null) {
+                maxQty = maxQty === null ? v.stock : Math.min(maxQty, v.stock);
+              }
+            }
+          }
+          const qty = clampQty(entry.qty, maxQty);
+          if (qty === 0) return [];
+
+          const offerImg = offer.image || "/products/bottle-cutout.png";
+          const titleAr = offer.titleAr || offer.title;
+          const titleEn = offer.titleEn || offer.title;
+          const subtitleAr =
+            offer.subtitleAr || offer.subtitle || "عرض خاص";
+          const subtitleEn =
+            offer.subtitleEn || offer.subtitle || "Special Offer";
+
+          return [
+            {
+              ...entry,
+              isOffer: true,
+              qty,
+              key: lineKey,
+              unitPrice: price,
+              lineTotal: price * qty,
+              maxQty,
+              product: {
+                id: "offer",
+                slug: "offer",
+                categoryId: null,
+                nameAr: titleAr,
+                nameEn: titleEn,
+                subtitleAr: subtitleAr,
+                subtitleEn: subtitleEn,
+                categoryAr: "",
+                categoryEn: "",
+                hookAr: "",
+                hookEn: "",
+                descriptionAr: [subtitleAr],
+                descriptionEn: [subtitleEn],
+                images: [{ src: offerImg, altAr: titleAr, altEn: titleEn }],
+                variants: [],
+                specs: [],
+                storageAr: "",
+                storageEn: "",
+                badgeAr: null,
+                badgeEn: null,
+                active: true,
+                comingSoon: false,
+                featured: false,
+                sortOrder: 0,
+                sample: false,
+                lowStockThreshold: 0,
+                familySlug: "offer",
+              },
+              variant: {
+                id: lineKey,
+                sizeLabelAr: subtitleAr,
+                sizeLabelEn: subtitleEn,
+                ml: 0,
+                price,
+                compareAt: null,
+                stock: maxQty,
+                cost: 0,
+                sku: "OFFER",
+                images: [{ src: offerImg, altAr: titleAr, altEn: titleEn }],
+              },
+              image: { src: offerImg, altAr: titleAr, altEn: titleEn },
+            },
+          ];
+        }
+
+        // Resolve standard catalog products by variant id
         const product = products.find(
           (p) =>
             p.active &&
@@ -65,16 +145,12 @@ export const useCartLines = (): CartLine[] => {
         if (!product || !variant) return [];
         const qty = clampQty(entry.qty, variant.stock);
         if (qty === 0) return [];
-        const price =
-          typeof entry.unitPrice === "number" && entry.unitPrice >= 0
-            ? entry.unitPrice
-            : variant.price;
-        const lineKey =
-          entry.key ||
-          `${product.id}:${variant.id}${entry.unitPrice !== undefined ? `:${entry.unitPrice}` : ""}`;
+        const price = variant.price;
+        const lineKey = `${product.id}:${variant.id}`;
         return [
           {
             ...entry,
+            isOffer: false,
             qty,
             key: lineKey,
             product,
@@ -83,7 +159,6 @@ export const useCartLines = (): CartLine[] => {
             image: getVariantImage(product, variant),
             lineTotal: price * qty,
             maxQty: variant.stock,
-            offerTitle: entry.offerTitle,
           },
         ];
       }),
@@ -97,15 +172,7 @@ export const useCartSubtotal = () =>
 /** Add-to-cart with server-catalog stock clamping. */
 export function useAddToCart() {
   const products = useCatalogProducts();
-  return (
-    _productId: string,
-    variantId: string,
-    qty = 1,
-    unitPrice?: number,
-    offerTitle?: string,
-  ) => {
-    // Variant-first lookup: the variant id is globally unique, so a stale
-    // product id (e.g. an old link or a pre-split cart) still resolves.
+  return (productId: string, variantId: string, qty = 1) => {
     const product = products.find(
       (p) =>
         p.active &&
@@ -115,18 +182,9 @@ export function useAddToCart() {
     const variant = product?.variants.find((v) => v.id === variantId);
     if (!product || !variant) return;
     const state = useCartStore.getState();
-    const itemKey =
-      unitPrice !== undefined ? `${variantId}:${unitPrice}` : variantId;
-    const current =
-      state.items.find(
-        (i) =>
-          (i.key ||
-            (i.unitPrice !== undefined
-              ? `${i.variantId}:${i.unitPrice}`
-              : i.variantId)) === itemKey,
-      )?.qty ?? 0;
+    const current = state.items.find((i) => !i.isOffer && i.variantId === variantId)?.qty ?? 0;
     const next = clampQty(current + qty, variant.stock);
     if (next <= 0 || next === current) return;
-    state.add(product.id, variantId, next - current, unitPrice, offerTitle);
+    state.add(product.id, variantId, next - current);
   };
 }

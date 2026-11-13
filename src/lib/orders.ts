@@ -6,6 +6,7 @@ import { readSettingsFresh, shippingFeeFor, isWholesale, type Settings } from ".
 import { checkoutSchema } from "./checkout-schema";
 import { buildConfirmedOrderMessage, whatsappOrderHref } from "./whatsapp";
 import type { Locale } from "./products";
+import type { OfferItem } from "./i18n";
 import { randomUUID } from "node:crypto";
 import {
   attachOrderAttribution,
@@ -107,33 +108,116 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     return { ok: false, code: "invalid_zone" };
   }
 
-  // Merge duplicate lines for the same variant + unitPrice so repeated lines combine.
-  const requested = new Map<
-    string,
-    { variantId: string; qty: number; unitPrice?: number; offerTitle?: string }
-  >();
+  // Merge duplicate lines for the same variant / offer so stock checks cannot be
+  // bypassed by splitting one quantity across repeated cart lines.
+  type RequestedItem = (typeof input.items)[number];
+  const requested = new Map<string, RequestedItem>();
   for (const item of input.items) {
-    const key =
-      item.unitPrice !== undefined
-        ? `${item.variantId}:${item.unitPrice}`
-        : item.variantId;
+    const key = item.isOffer ? `offer:${item.offerTitle || item.variantId}` : item.variantId;
     const current = requested.get(key);
     if (current) current.qty += item.qty;
     else requested.set(key, { ...item });
   }
 
-  // Aggregate total requested quantity per physical variant for safe stock checks
+  // Load server offers from settings for authoritative pricing and stock validation
+  const serverOffers: OfferItem[] = await (async () => {
+    try {
+      const row = await db
+        .prepare("SELECT value FROM settings WHERE key = 'content:offers'")
+        .get<{ value: string }>();
+      if (!row?.value) return [];
+      const parsed = JSON.parse(row.value);
+      const arItems = Array.isArray(parsed?.ar?.items) ? parsed.ar.items : [];
+      const enItems = Array.isArray(parsed?.en?.items) ? parsed.en.items : [];
+      return [...arItems, ...enItems].filter((o: any) => o && o.enabled);
+    } catch {
+      return [];
+    }
+  })();
+
+  // Aggregate total physical quantity requested per variant for safe stock checks
   const totalQtyPerVariant = new Map<string, number>();
   for (const item of requested.values()) {
-    totalQtyPerVariant.set(
-      item.variantId,
-      (totalQtyPerVariant.get(item.variantId) || 0) + item.qty,
-    );
+    if (item.isOffer) {
+      const match = serverOffers.find(
+        (o) =>
+          o.title === item.offerTitle ||
+          `offer:${o.title}` === item.variantId,
+      );
+      const pids = match?.productIds || item.productIds || [];
+      for (const pid of pids) {
+        totalQtyPerVariant.set(
+          pid,
+          (totalQtyPerVariant.get(pid) || 0) + item.qty,
+        );
+      }
+    } else {
+      totalQtyPerVariant.set(
+        item.variantId,
+        (totalQtyPerVariant.get(item.variantId) || 0) + item.qty,
+      );
+    }
   }
 
   const lines = [...requested.values()].flatMap((item) => {
-    // Variant-first lookup: stale product ids from pre-split carts still
-    // resolve to the product that now owns this size.
+    if (item.isOffer) {
+      const match = serverOffers.find(
+        (o) =>
+          o.title === item.offerTitle ||
+          `offer:${o.title}` === item.variantId,
+      );
+      const pids = match?.productIds || item.productIds || [];
+      let totalCost = 0;
+      let combinedProductTotal = 0;
+      let outOfStock = false;
+
+      for (const pid of pids) {
+        const prod = products.find(
+          (p) =>
+            p.variants.some((v) => v.id === pid) ||
+            p.id === pid,
+        );
+        const v = prod?.variants.find((v) => v.id === pid) || prod?.variants[0];
+        if (v) {
+          totalCost += v.cost ?? 0;
+          combinedProductTotal += v.price;
+          const totalPhysical = totalQtyPerVariant.get(pid) ?? item.qty;
+          if (v.stock !== null && v.stock < totalPhysical) {
+            outOfStock = true;
+          }
+        }
+      }
+
+      if (outOfStock) return [];
+
+      let verifiedPrice = 0;
+      if (match?.price && Number(match.price) > 0) {
+        verifiedPrice = Number(match.price);
+      } else if (combinedProductTotal > 0) {
+        verifiedPrice = combinedProductTotal;
+      } else if (typeof item.offerPrice === "number" && item.offerPrice >= 0) {
+        verifiedPrice = item.offerPrice;
+      }
+
+      const title = item.offerTitle || match?.title || "عرض خاص";
+      const subtitle = item.offerSubtitle || match?.subtitle || "عرض خاص";
+
+      return [
+        {
+          productId: "offer",
+          variantId: item.variantId,
+          nameAr: title,
+          nameEn: title,
+          sizeAr: subtitle,
+          sizeEn: subtitle,
+          unitPrice: verifiedPrice,
+          unitCost: totalCost,
+          qty: item.qty,
+        },
+      ];
+    }
+
+    // Standard catalog product
     const product = products.find(
       (p) =>
         p.active &&
@@ -142,30 +226,18 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     );
     const variant = product?.variants.find((v) => v.id === item.variantId);
     if (!product || !variant) return [];
-    const totalVariantQty = totalQtyPerVariant.get(item.variantId) ?? item.qty;
-    if (variant.stock !== null && variant.stock < totalVariantQty) return [];
-
-    let unitPrice = variant.price;
-    // Allow discounted unitPrice from offers (capped at catalog price)
-    if (
-      typeof item.unitPrice === "number" &&
-      item.unitPrice >= 0 &&
-      item.unitPrice <= variant.price
-    ) {
-      unitPrice = item.unitPrice;
-    }
-
-    const offerSuffix = item.offerTitle ? ` (${item.offerTitle})` : "";
+    const totalPhysical = totalQtyPerVariant.get(item.variantId) ?? item.qty;
+    if (variant.stock !== null && variant.stock < totalPhysical) return [];
 
     return [
       {
         productId: product.id,
         variantId: variant.id,
-        nameAr: `${product.nameAr}${offerSuffix}`,
-        nameEn: `${product.nameEn}${offerSuffix}`,
+        nameAr: product.nameAr,
+        nameEn: product.nameEn,
         sizeAr: variant.sizeLabelAr,
         sizeEn: variant.sizeLabelEn,
-        unitPrice,
+        unitPrice: variant.price,
         unitCost: variant.cost,
         qty: item.qty,
       },

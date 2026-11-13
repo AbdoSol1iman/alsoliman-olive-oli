@@ -3,25 +3,33 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+export type CartOffer = {
+  id: string;
+  title: string;
+  titleAr?: string;
+  titleEn?: string;
+  subtitle?: string;
+  subtitleAr?: string;
+  subtitleEn?: string;
+  price: number;
+  image?: string;
+  productIds?: string[];
+};
+
 export type CartEntry = {
   key?: string;
+  isOffer?: boolean;
   productId: string;
   variantId: string;
   qty: number;
-  unitPrice?: number;
-  offerTitle?: string;
+  offer?: CartOffer;
 };
 
 type CartState = {
   items: CartEntry[];
   isOpen: boolean;
-  add: (
-    productId: string,
-    variantId: string,
-    qty?: number,
-    unitPrice?: number,
-    offerTitle?: string,
-  ) => void;
+  add: (productId: string, variantId: string, qty?: number) => void;
+  addOffer: (offer: CartOffer, qty?: number) => void;
   remove: (keyOrVariantId: string) => void;
   setQty: (keyOrVariantId: string, qty: number) => void;
   clear: () => void;
@@ -31,44 +39,63 @@ type CartState = {
 };
 
 /**
- * The cart holds item ids, quantities, and optional offer price overrides.
+ * The cart holds item ids, quantities, and offer bundles. Prices for standard
+ * catalog products are always authoritative from live catalog variant prices.
  */
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
       isOpen: false,
-      add: (productId, variantId, qty = 1, unitPrice?: number, offerTitle?: string) => {
-        const itemKey =
-          unitPrice !== undefined ? `${variantId}:${unitPrice}` : variantId;
+      add: (productId, variantId, qty = 1) => {
         const existing = get().items.find(
-          (i) =>
-            (i.key ||
-              (i.unitPrice !== undefined
-                ? `${i.variantId}:${i.unitPrice}`
-                : i.variantId)) === itemKey,
+          (i) => !i.isOffer && (i.variantId === variantId || i.key === variantId),
         );
         const nextQty = (existing?.qty ?? 0) + qty;
         if (nextQty <= 0) return;
         set({
           items: existing
             ? get().items.map((i) =>
-                (i.key ||
-                  (i.unitPrice !== undefined
-                    ? `${i.variantId}:${i.unitPrice}`
-                    : i.variantId)) === itemKey
+                !i.isOffer && (i.variantId === variantId || i.key === variantId)
                   ? { ...i, qty: nextQty }
                   : i,
               )
             : [
                 ...get().items,
                 {
-                  key: itemKey,
+                  key: variantId,
+                  isOffer: false,
                   productId,
                   variantId,
                   qty: nextQty,
-                  unitPrice,
-                  offerTitle,
+                },
+              ],
+          isOpen: true,
+        });
+      },
+      addOffer: (offer, qty = 1) => {
+        const offerKey = `offer:${offer.id || offer.title}`;
+        const existing = get().items.find(
+          (i) => i.isOffer && (i.key === offerKey || i.variantId === offerKey),
+        );
+        const nextQty = (existing?.qty ?? 0) + qty;
+        if (nextQty <= 0) return;
+        set({
+          items: existing
+            ? get().items.map((i) =>
+                i.isOffer && (i.key === offerKey || i.variantId === offerKey)
+                  ? { ...i, qty: nextQty }
+                  : i,
+              )
+            : [
+                ...get().items,
+                {
+                  key: offerKey,
+                  isOffer: true,
+                  productId: "offer",
+                  variantId: offerKey,
+                  qty: nextQty,
+                  offer,
                 },
               ],
           isOpen: true,
@@ -80,7 +107,7 @@ export const useCartStore = create<CartState>()(
             (i) =>
               i.key !== keyOrVariantId &&
               i.variantId !== keyOrVariantId &&
-              `${i.variantId}:${i.unitPrice}` !== keyOrVariantId,
+              `${i.productId}:${i.variantId}` !== keyOrVariantId,
           ),
         }),
       setQty: (keyOrVariantId, qty) => {
@@ -92,7 +119,7 @@ export const useCartStore = create<CartState>()(
           items: get().items.map((i) =>
             i.key === keyOrVariantId ||
             i.variantId === keyOrVariantId ||
-            `${i.variantId}:${i.unitPrice}` === keyOrVariantId
+            `${i.productId}:${i.variantId}` === keyOrVariantId
               ? { ...i, qty }
               : i,
           ),
@@ -106,7 +133,6 @@ export const useCartStore = create<CartState>()(
     {
       name: "alsuliman-cart",
       version: 2,
-      // only the line items survive a refresh — never the drawer state
       partialize: (state) => ({ items: state.items }) as unknown as CartState,
     },
   ),

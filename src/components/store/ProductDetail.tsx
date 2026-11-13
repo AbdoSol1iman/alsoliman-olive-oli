@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/Button";
 import { QuantityStepper } from "@/components/ui/QuantityStepper";
@@ -50,15 +50,19 @@ export function ProductDetail({
 
   const onAdd = () => {
     if (unavailable) return;
-    add(product.id, variant.id, qty);
+    setAdded(true);
+    window.setTimeout(() => setAdded(false), 2000);
+
+    startTransition(() => {
+      add(product.id, variant.id, qty);
+    });
+
     trackEvent("AddToCart", {
       productId: product.id,
       variantId: variant.id,
       value: variant.price * qty,
       metadata: { qty },
     });
-    setAdded(true);
-    window.setTimeout(() => setAdded(false), 2000);
   };
 
   return (
@@ -199,9 +203,11 @@ export function ProductDetail({
                     type="button"
                     disabled={disabled}
                     onClick={() => {
-                      setVariant(v);
-                      setQty(1);
-                      setImageIndex(0);
+                      startTransition(() => {
+                        setVariant(v);
+                        setQty(1);
+                        setImageIndex(0);
+                      });
                     }}
                     aria-pressed={active}
                     className={cx(

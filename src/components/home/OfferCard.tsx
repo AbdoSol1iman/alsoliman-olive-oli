@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { startTransition, useMemo, useState } from "react";
 import { ArrowEnd, Check, Chevron, Leaf, Plus } from "@/components/ui/Icons";
 import { useAddToCart, useCatalogProducts } from "@/lib/catalog-client";
 import { useCartStore } from "@/lib/cart-store";
@@ -10,31 +10,6 @@ import { trackEvent } from "@/lib/analytics";
 import { cx, formatPrice } from "@/lib/format";
 import type { Dictionary, OfferItem } from "@/lib/i18n";
 import type { Locale } from "@/lib/products";
-
-/** Allocates an offer bundle total proportionally across its component lines. */
-function allocateBundlePrices<T extends { unitPrice: number; qty: number }>(
-  items: T[],
-  targetTotal: number,
-): (T & { unitPrice: number })[] {
-  const originalTotal = items.reduce((sum, i) => sum + i.unitPrice * i.qty, 0);
-  if (originalTotal <= 0 || targetTotal <= 0 || targetTotal === originalTotal) {
-    return items;
-  }
-
-  let runningSum = 0;
-  return items.map((item, idx) => {
-    if (idx === items.length - 1) {
-      // Last item absorbs any rounding remainder so the sum matches 100%
-      const remainingTotal = targetTotal - runningSum;
-      const unit = Math.max(0, Math.round(remainingTotal / item.qty));
-      return { ...item, unitPrice: unit };
-    }
-    const itemShare = ((item.unitPrice * item.qty) / originalTotal) * targetTotal;
-    const unit = Math.max(0, Math.round(itemShare / item.qty));
-    runningSum += unit * item.qty;
-    return { ...item, unitPrice: unit };
-  });
-}
 
 export function OfferCard({
   offer,
@@ -47,6 +22,7 @@ export function OfferCard({
 }) {
   const products = useCatalogProducts();
   const add = useAddToCart();
+  const addOffer = useCartStore((s) => s.addOffer);
   const openCart = useCartStore((s) => s.open);
   const [justAdded, setJustAdded] = useState(false);
 
@@ -106,14 +82,14 @@ export function OfferCard({
   const hasCombined = combinedItems.length > 0;
   const combinedTotal = combinedItems.reduce((sum, item) => sum + item.unitPrice * item.qty, 0);
 
-  // Pricing
+  // Pricing: use explicit offer price if set, else sum of combined items
   const effectivePrice = offer.price && Number(offer.price) > 0
     ? Number(offer.price)
-    : combinedTotal;
+    : (hasCombined ? combinedTotal : 0);
 
   const compareAtPrice = offer.compareAt && Number(offer.compareAt) > 0
     ? Number(offer.compareAt)
-    : null;
+    : (hasCombined && combinedTotal > effectivePrice ? combinedTotal : null);
 
   const hasDiscount = compareAtPrice !== null && effectivePrice > 0 && compareAtPrice > effectivePrice;
   const discountSavings = hasDiscount ? compareAtPrice - effectivePrice : 0;
@@ -199,40 +175,47 @@ export function OfferCard({
     e.preventDefault();
     e.stopPropagation();
 
+    // Immediate visual feedback on the button
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 1800);
+
     // Case A: Dropdown is active and individual variant is selected
     if (offer.hasDropdown && selectedDropdownOption && !selectedDropdownOption.isBundle) {
       const targetVariantId = selectedDropdownOption.id;
       const prod = products.find((p) => p.variants.some((v) => v.id === targetVariantId));
       if (!prod) return;
-      const customPrice = offer.price && Number(offer.price) > 0 ? Number(offer.price) : undefined;
-      add(prod.id, targetVariantId, 1, customPrice, offer.title || undefined);
+      startTransition(() => {
+        add(prod.id, targetVariantId, 1);
+        openCart();
+      });
       trackEvent("AddToCart", {
         productId: prod.id,
         variantId: targetVariantId,
         metadata: { placement: "offer_dropdown" },
       });
-      openCart();
-      setJustAdded(true);
-      window.setTimeout(() => setJustAdded(false), 1800);
       return;
     }
 
-    // Case B: Combined bundle (all combined products added together at offer price)
+    // Case B: Combined bundle
     if (hasCombined) {
       if (combinedItems.some((i) => i.disabled)) return;
-      const allocatedItems = allocateBundlePrices(combinedItems, effectivePrice);
-      for (const item of allocatedItems) {
-        add(item.productId, item.variantId, item.qty, item.unitPrice, offer.title || undefined);
-        trackEvent("AddToCart", {
-          productId: item.productId,
-          variantId: item.variantId,
-          value: item.unitPrice * item.qty,
-          metadata: { qty: item.qty, placement: "offer_combined" },
+      startTransition(() => {
+        addOffer({
+          id: offer.title || "bundle",
+          title: offer.title,
+          subtitle: offer.subtitle || (locale === "ar" ? "عرض خاص" : "Special Offer"),
+          price: effectivePrice,
+          image: offer.image || "/products/bottle-cutout.png",
+          productIds: combinedItems.map((i) => i.variantId),
         });
-      }
-      openCart();
-      setJustAdded(true);
-      window.setTimeout(() => setJustAdded(false), 1800);
+        openCart();
+      });
+      trackEvent("AddToCart", {
+        productId: "offer",
+        variantId: offer.title || "bundle",
+        value: effectivePrice,
+        metadata: { placement: "offer_combined" },
+      });
       return;
     }
 
@@ -241,11 +224,37 @@ export function OfferCard({
       const targetVariantId = selectedDropdownOption.id;
       const prod = products.find((p) => p.variants.some((v) => v.id === targetVariantId));
       if (!prod) return;
-      const customPrice = offer.price && Number(offer.price) > 0 ? Number(offer.price) : undefined;
-      add(prod.id, targetVariantId, 1, customPrice, offer.title || undefined);
-      openCart();
-      setJustAdded(true);
-      window.setTimeout(() => setJustAdded(false), 1800);
+      startTransition(() => {
+        add(prod.id, targetVariantId, 1);
+        openCart();
+      });
+      trackEvent("AddToCart", {
+        productId: prod.id,
+        variantId: targetVariantId,
+        metadata: { placement: "offer_single" },
+      });
+      return;
+    }
+
+    // Case D: General offer with a title and price
+    if (effectivePrice > 0 && offer.title) {
+      startTransition(() => {
+        addOffer({
+          id: offer.title,
+          title: offer.title,
+          subtitle: offer.subtitle || (locale === "ar" ? "عرض خاص" : "Special Offer"),
+          price: effectivePrice,
+          image: offer.image || "/products/bottle-cutout.png",
+          productIds: offer.productId ? [offer.productId] : undefined,
+        });
+        openCart();
+      });
+      trackEvent("AddToCart", {
+        productId: "offer",
+        variantId: offer.title,
+        value: effectivePrice,
+        metadata: { placement: "offer_standalone" },
+      });
     }
   };
 

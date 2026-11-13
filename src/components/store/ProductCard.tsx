@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import { ArrowEnd, Check, Plus } from "@/components/ui/Icons";
 import { useCartStore } from "@/lib/cart-store";
 import { useAddToCart } from "@/lib/catalog-client";
@@ -43,16 +43,20 @@ export function ProductCard({
 
   const onQuickAdd = () => {
     if (unavailable) return;
-    add(product.id, variant.id, 1);
+    setJustAdded(true);
+    window.setTimeout(() => setJustAdded(false), 1800);
+
+    startTransition(() => {
+      add(product.id, variant.id, 1);
+      openCart();
+    });
+
     trackEvent("AddToCart", {
       productId: product.id,
       variantId: variant.id,
       value: variant.price,
       metadata: { qty: 1, placement: "card" },
     });
-    openCart();
-    setJustAdded(true);
-    window.setTimeout(() => setJustAdded(false), 1800);
   };
 
   return (
