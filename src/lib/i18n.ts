@@ -65,7 +65,7 @@ const ar = {
     { title: "عناية بالجودة", body: "اختيار واعٍ وتعبئة تحفظ الطعم" },
     { title: "طعم أصيل", body: "مذاق طبيعي متوازن على المائدة" },
     { title: "للاستخدام اليومي", body: "للسلطة والطهي والتغميس" },
-    { title: "أحجام متعددة", body: "٥٠٠ مل · ٧٥٠ مل · ١ لتر" },
+    { title: "أحجام متعددة", body: "٥٠٠ مل · ٢٥٠ مل · ١ لتر" },
   ],
   featured: {
     eyebrow: "من المتجر",
@@ -419,7 +419,7 @@ const en: Dictionary = {
     { title: "Care for quality", body: "Considered selection, protective packaging" },
     { title: "Authentic flavour", body: "A balanced, natural character" },
     { title: "For every day", body: "Salads, cooking and dipping" },
-    { title: "Three sizes", body: "500 ml · 750 ml · 1 L" },
+    { title: "Three sizes", body: "500 ml · 250 ml · 1 L" },
   ],
   featured: {
     eyebrow: "The shop",
