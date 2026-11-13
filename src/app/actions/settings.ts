@@ -62,6 +62,7 @@ const settingsSchemas: Record<keyof Settings, z.ZodType> = {
     titleEn: z.string().trim().max(160),
     descriptionAr: z.string().trim().max(400),
     descriptionEn: z.string().trim().max(400),
+    ogImage: z.string().trim().max(300).optional(),
   }),
   payments: z.object({
     instapayEnabled: z.boolean(),

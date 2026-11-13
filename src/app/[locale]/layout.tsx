@@ -32,16 +32,23 @@ export async function generateMetadata({
   const title = isAr ? settings.seo.titleAr : settings.seo.titleEn;
   const description = isAr ? settings.seo.descriptionAr : settings.seo.descriptionEn;
   const siteName = isAr ? settings.store.nameAr : settings.store.nameEn;
+  const og = await buildOpenGraph({
+    locale: isAr ? "ar" : "en",
+    path: `/${isAr ? "ar" : "en"}`,
+    title,
+    description,
+  });
   return {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
     title: { default: title, template: `%s | ${siteName}` },
     description,
-    openGraph: await buildOpenGraph({
-      locale: isAr ? "ar" : "en",
-      path: `/${isAr ? "ar" : "en"}`,
+    openGraph: og,
+    twitter: {
+      card: "summary_large_image",
       title,
       description,
-    }),
+      images: og.images,
+    },
     icons: { icon: "/favicon.ico" },
   };
 }

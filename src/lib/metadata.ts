@@ -49,9 +49,9 @@ export async function buildOpenGraph({
     // preview crawlers (Facebook, WhatsApp, LinkedIn).
     images: images ?? [
       {
-        url: "/products/bottle-card.jpg",
-        width: 1200,
-        height: 1500,
+        url: settings.seo.ogImage || "/brand/Main-Logo-HD.png",
+        width: 1872,
+        height: 1464,
         alt: isAr
           ? `${siteName} — زيت زيتون بكر ممتاز`
           : `${siteName} — extra virgin olive oil`,

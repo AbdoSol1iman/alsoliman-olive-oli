@@ -444,6 +444,21 @@ export function SeoSettings({ initial }: { initial: Settings["seo"] }) {
             onChange={(e) => set({ descriptionEn: e.target.value })}
             className="sm:col-span-2"
           />
+          <div className="sm:col-span-2">
+            <span className="mb-1.5 block text-[0.75rem] text-forest">صورة المعاينة على السوشيال ميديا (فيسبوك، واتساب)</span>
+            <div className="flex items-center gap-3">
+              <MediaPicker
+                current={draft.ogImage || "/brand/Main-Logo-HD.png"}
+                onSelect={(path) => set({ ogImage: path })}
+                triggerLabel="اختر صورة المعاينة"
+              />
+              {draft.ogImage && draft.ogImage !== "/brand/Main-Logo-HD.png" ? (
+                <MiniButton onClick={() => set({ ogImage: "/brand/Main-Logo-HD.png" })}>
+                  استعادة الشعار الافتراضي
+                </MiniButton>
+              ) : null}
+            </div>
+          </div>
         </div>
       )}
     </SettingsForm>

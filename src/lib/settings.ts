@@ -47,6 +47,7 @@ export type Settings = {
     titleEn: string;
     descriptionAr: string;
     descriptionEn: string;
+    ogImage?: string;
   };
   payments: {
     instapayEnabled: boolean;
@@ -105,6 +106,7 @@ export function defaultSettings(): Settings {
         "زيت زيتون بكر ممتاز من آل سليمان — عناية بالجودة، طعم أصيل، وتوصيل لجميع محافظات مصر.",
       descriptionEn:
         "Extra virgin olive oil by Alsuliman — care for quality, authentic taste, delivery across Egypt.",
+      ogImage: "/brand/Main-Logo-HD.png",
     },
     payments: {
       instapayEnabled: defaultPayments.instapay.enabled,
