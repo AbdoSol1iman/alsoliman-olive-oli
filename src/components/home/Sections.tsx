@@ -367,27 +367,4 @@ export function CulinarySection({ dict }: { dict: Dictionary }) {
   );
 }
 
-export function ReviewsSection({ locale, dict }: { locale: Locale; dict: Dictionary }) {
-  return (
-    <section className="paper py-20 md:py-24" aria-labelledby="reviews-title">
-      <div className="container-page">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="eyebrow">{dict.reviews.eyebrow}</p>
-          <h2 id="reviews-title" className="mt-4 text-[clamp(1.7rem,3.6vw,2.6rem)]">
-            {dict.reviews.title}
-          </h2>
-
-          <div className="mx-auto mt-10 border border-gold/25 bg-ivory px-8 py-12">
-            <div className="mx-auto flex size-12 items-center justify-center rounded-full border border-gold/40 text-gold">
-              <Sparkle size={20} />
-            </div>
-            <p className="mt-5 text-[0.88rem] leading-8 text-ink-muted">{dict.reviews.empty}</p>
-            <ButtonLink href={`/${locale}/shop`} variant="outline" size="sm" className="mt-6">
-              {dict.reviews.cta}
-            </ButtonLink>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
+export { ReviewsSection } from "./ReviewsSection";

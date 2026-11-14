@@ -94,6 +94,7 @@ export type ConfirmedOrder = {
   reference: string;
   customerName: string;
   phone: string;
+  phone2?: string | null;
   governorate: string;
   city: string;
   address: string;
@@ -142,6 +143,7 @@ export function buildConfirmedOrderMessage(order: ConfirmedOrder, locale: Locale
           `🧾 رقم الطلب: ${order.reference}`,
           `👤 الاسم: ${order.customerName}`,
           `📞 الهاتف: ${order.phone}`,
+          ...(order.phone2 ? [`📞 هاتف إضافي: ${order.phone2}`] : []),
           `📍 العنوان: ${order.governorate} — ${order.city}`,
           `   ${order.address}`,
           "",
@@ -164,6 +166,7 @@ export function buildConfirmedOrderMessage(order: ConfirmedOrder, locale: Locale
           `🧾 Order reference: ${order.reference}`,
           `👤 Name: ${order.customerName}`,
           `📞 Phone: ${order.phone}`,
+          ...(order.phone2 ? [`📞 Alt Phone: ${order.phone2}`] : []),
           `📍 Address: ${order.governorate} — ${order.city}`,
           `   ${order.address}`,
           "",

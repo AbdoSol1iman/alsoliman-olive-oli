@@ -58,6 +58,7 @@ export function CheckoutForm({
   const [form, setForm] = useState({
     fullName: "",
     phone: "",
+    phone2: "",
     governorate: "",
     city: "",
     address: "",
@@ -143,6 +144,7 @@ export function CheckoutForm({
         localized[field] =
           field === "fullName" ? dict.checkout.validation.name
           : field === "phone" ? dict.checkout.validation.phone
+          : field === "phone2" ? (dict.checkout.validation.phone2 ?? dict.checkout.validation.phone)
           : field === "governorate" ? dict.checkout.validation.governorate
           : field === "city" ? dict.checkout.validation.city
           : field === "address" ? dict.checkout.validation.address
@@ -342,6 +344,27 @@ export function CheckoutForm({
                 />
                 <p id="phone-hint" className="mt-1.5 text-[0.68rem] text-ink-muted">{dict.checkout.phoneHint}</p>
                 {errors.phone ? <p className="mt-1 text-[0.72rem] text-red-800">{errors.phone}</p> : null}
+              </div>
+
+              <div>
+                <label htmlFor="phone2" className="mb-1.5 block text-[0.78rem] text-forest">
+                  {dict.checkout.phone2} <span className="text-[0.7rem] font-normal text-ink-muted">({locale === "ar" ? "اختياري" : "optional"})</span>
+                </label>
+                <input
+                  id="phone2"
+                  name="phone2"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  dir="ltr"
+                  value={form.phone2}
+                  onChange={(e) => set("phone2", e.target.value)}
+                  placeholder={dict.checkout.phone2Placeholder}
+                  aria-invalid={Boolean(errors.phone2)}
+                  aria-describedby="phone2-hint"
+                  className={fieldClass("phone2")}
+                />
+                <p id="phone2-hint" className="mt-1.5 text-[0.68rem] text-ink-muted">{dict.checkout.phone2Hint}</p>
+                {errors.phone2 ? <p className="mt-1 text-[0.72rem] text-red-800">{errors.phone2}</p> : null}
               </div>
 
               <div>

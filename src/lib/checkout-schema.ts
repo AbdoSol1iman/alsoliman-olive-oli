@@ -35,6 +35,13 @@ export const checkoutSchema = z.object({
     .trim()
     .transform((v) => v.replace(/[\s-]/g, ""))
     .refine((v) => /^01[0125][0-9]{8}$/.test(v), "invalid_phone"),
+  phone2: z
+    .string()
+    .trim()
+    .transform((v) => v.replace(/[\s-]/g, ""))
+    .refine((v) => v === "" || /^01[0125][0-9]{8}$/.test(v), "invalid_phone2")
+    .optional()
+    .default(""),
   governorate: z.string().trim().min(1).max(60),
   city: z.string().trim().min(2).max(80),
   address: z.string().trim().min(10).max(400),

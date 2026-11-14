@@ -26,6 +26,7 @@ const SCHEMA = `
     status TEXT NOT NULL DEFAULT 'pending',
     customer_name TEXT NOT NULL,
     phone TEXT NOT NULL,
+    phone2 TEXT,
     governorate TEXT NOT NULL,
     city TEXT NOT NULL,
     address TEXT NOT NULL,
@@ -58,6 +59,22 @@ const SCHEMA = `
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_order_notes_order ON order_notes(order_id);
+
+  CREATE TABLE IF NOT EXISTS reviews (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    author_name TEXT NOT NULL,
+    phone TEXT NOT NULL,
+    rating INTEGER NOT NULL DEFAULT 5,
+    title TEXT,
+    body TEXT NOT NULL,
+    image_url TEXT,
+    verified_order_reference TEXT,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
+  CREATE INDEX IF NOT EXISTS idx_reviews_phone ON reviews(phone);
 
   CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY,
@@ -712,6 +729,27 @@ async function migrate(db: Db) {
   if (!hasColumn("updated_at")) {
     await db.exec("ALTER TABLE orders ADD COLUMN updated_at TEXT");
   }
+  if (!hasColumn("phone2")) {
+    await db.exec("ALTER TABLE orders ADD COLUMN phone2 TEXT");
+  }
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      author_name TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      rating INTEGER NOT NULL DEFAULT 5,
+      title TEXT,
+      body TEXT NOT NULL,
+      image_url TEXT,
+      verified_order_reference TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_reviews_status ON reviews(status);
+    CREATE INDEX IF NOT EXISTS idx_reviews_phone ON reviews(phone);
+  `);
 
   // Versioned schema upgrades. Each migration is applied once per database;
   // every statement itself is also idempotent so a crash mid-run is safe.

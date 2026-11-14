@@ -36,6 +36,7 @@ export type OrderRecord = {
   status: OrderStatus;
   customer_name: string;
   phone: string;
+  phone2?: string | null;
   governorate: string;
   city: string;
   address: string;
@@ -278,8 +279,8 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
     // customer sent anything, so only the owner can confirm an order later.
     const inserted = await tx
       .prepare(
-        `INSERT OR IGNORE INTO orders (id, reference, created_at, status, customer_name, phone, governorate, city, address, notes, payment_method, subtotal, shipping, total, idempotency_key, updated_at)
-         VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO orders (id, reference, created_at, status, customer_name, phone, phone2, governorate, city, address, notes, payment_method, subtotal, shipping, total, idempotency_key, updated_at)
+         VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -287,6 +288,7 @@ export async function createOrder(raw: unknown): Promise<CreateOrderResult> {
         now,
         input.fullName,
         input.phone,
+        input.phone2 || null,
         input.governorate,
         input.city,
         input.address,
@@ -385,6 +387,7 @@ export function buildOrderWhatsappHref(
       reference: order.reference,
       customerName: order.customer_name,
       phone: order.phone,
+      phone2: order.phone2,
       governorate: (locale === "ar" ? zone?.ar : zone?.en) || order.governorate,
       city: order.city,
       address: order.address,

@@ -3,6 +3,7 @@ import "../globals.css";
 import { Sidebar } from "@/components/admin/Sidebar";
 import { getSession } from "@/lib/auth";
 import { fontVariables } from "@/lib/fonts";
+import { getPendingReviewsCount } from "@/lib/reviews";
 import { connection } from "next/server";
 
 /** Admin is a standalone, Arabic-only area — outside the storefront locale tree. */
@@ -37,6 +38,8 @@ export default async function AdminRootLayout({ children }: { children: React.Re
     );
   }
 
+  const pendingReviewsCount = await getPendingReviewsCount();
+
   return (
     <html lang="ar" dir="rtl" className={fontVariables} suppressHydrationWarning data-scroll-behavior="smooth">
       <body className="min-h-svh bg-cream/30 text-charcoal">
@@ -47,7 +50,7 @@ export default async function AdminRootLayout({ children }: { children: React.Re
           تخطَّ إلى المحتوى
         </a>
 
-        <Sidebar name={session.name} email={session.email} />
+        <Sidebar name={session.name} email={session.email} pendingReviewsCount={pendingReviewsCount} />
 
         <div className="lg:ps-64 print:ps-0">
           <main id="main" className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-8 md:py-8">

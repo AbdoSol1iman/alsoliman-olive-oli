@@ -14,6 +14,7 @@ import {
 import { getStoreProducts } from "@/lib/catalog";
 import { getSettings } from "@/lib/settings";
 import { getSiteDictionary, getSiteExtras } from "@/lib/content";
+import { getApprovedReviews } from "@/lib/reviews";
 import { buildFeaturedItems } from "@/lib/products";
 import type { Locale } from "@/lib/products";
 
@@ -41,11 +42,12 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
 
-  const [dict, products, settings, extras] = await Promise.all([
+  const [dict, products, settings, extras, reviews] = await Promise.all([
     getSiteDictionary(locale),
     getStoreProducts(),
     getSettings(),
     getSiteExtras(locale),
+    getApprovedReviews(),
   ]);
   const featured = buildFeaturedItems(products);
 
@@ -63,7 +65,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
       <StorySection locale={locale} dict={dict} image={extras.media.storyImage || undefined} />
       <WhySection locale={locale} dict={dict} image={extras.media.whyImage || undefined} />
       <CulinarySection dict={dict} />
-      <ReviewsSection locale={locale} dict={dict} />
+      <ReviewsSection locale={locale} dict={dict} reviews={reviews} />
       <Newsletter dict={dict} />
     </>
   );

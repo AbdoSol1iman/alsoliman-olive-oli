@@ -75,6 +75,11 @@ export default async function AdminOrderPage({
           <p className="tnum mt-1 text-[0.84rem] text-ink-muted" dir="ltr">
             {order.phone}
           </p>
+          {order.phone2 ? (
+            <p className="tnum mt-1 text-[0.8rem] text-ink-muted" dir="ltr">
+              هاتف إضافي: {order.phone2}
+            </p>
+          ) : null}
           <p className="mt-2 text-[0.82rem] leading-7 text-ink-muted">
             {order.address}، {order.city}، {zone?.ar ?? order.governorate}
           </p>

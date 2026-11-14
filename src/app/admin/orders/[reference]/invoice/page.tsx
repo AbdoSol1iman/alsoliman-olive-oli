@@ -65,6 +65,7 @@ export default async function AdminInvoicePage({
             <p className="mt-2 text-[0.88rem] text-forest">{order.customer_name}</p>
             <p className="tnum text-[0.78rem] text-ink-muted" dir="ltr">
               {order.phone}
+              {order.phone2 ? ` · ${order.phone2}` : ""}
             </p>
             <p className="mt-1 text-[0.78rem] leading-6 text-ink-muted">
               {order.address}، {order.city}، {zone?.ar ?? order.governorate}

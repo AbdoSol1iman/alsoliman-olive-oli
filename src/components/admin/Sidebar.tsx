@@ -13,6 +13,7 @@ type IconKind =
   | "tag"
   | "receipt"
   | "users"
+  | "star"
   | "image"
   | "home"
   | "file"
@@ -69,6 +70,12 @@ function NavIcon({ kind }: { kind: IconKind }) {
         <svg {...common}>
           <circle cx="9" cy="8" r="3.2" />
           <path d="M3.5 20c.7-3.2 3-5 5.5-5s4.8 1.8 5.5 5M16 5.5a3 3 0 0 1 0 5.6M17.5 15c2 .7 3.2 2.3 3.6 5" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg {...common}>
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
       );
     case "image":
@@ -131,6 +138,7 @@ const links: { href: string; label: string; kind: IconKind; exact?: boolean }[] 
   { href: "/admin/products", label: "المنتجات", kind: "box" },
   { href: "/admin/categories", label: "التصنيفات", kind: "tag" },
   { href: "/admin/orders", label: "الطلبات", kind: "receipt" },
+  { href: "/admin/reviews", label: "التقييمات", kind: "star" },
   { href: "/admin/marketing", label: "تحليلات التسويق", kind: "chart" },
   { href: "/admin/customers", label: "العملاء", kind: "users" },
   { href: "/admin/media", label: "مكتبة الوسائط", kind: "image" },
@@ -141,7 +149,15 @@ const links: { href: string; label: string; kind: IconKind; exact?: boolean }[] 
   { href: "/admin/profile", label: "الملف الشخصي", kind: "user" },
 ];
 
-export function Sidebar({ name, email }: { name: string; email: string }) {
+export function Sidebar({
+  name,
+  email,
+  pendingReviewsCount = 0,
+}: {
+  name: string;
+  email: string;
+  pendingReviewsCount?: number;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -167,7 +183,13 @@ export function Sidebar({ name, email }: { name: string; email: string }) {
           >
             <NavIcon kind={l.kind} />
             <span>{l.label}</span>
-            {active ? <span aria-hidden className="ms-auto size-1.5 rounded-full bg-gold" /> : null}
+            {l.href === "/admin/reviews" && pendingReviewsCount > 0 ? (
+              <span className="ms-auto rounded-full bg-gold/25 px-1.5 py-0.5 text-[0.68rem] font-bold text-gold-pale">
+                {pendingReviewsCount}
+              </span>
+            ) : active ? (
+              <span aria-hidden className="ms-auto size-1.5 rounded-full bg-gold" />
+            ) : null}
           </Link>
         );
       })}
