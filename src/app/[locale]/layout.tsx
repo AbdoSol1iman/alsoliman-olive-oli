@@ -14,6 +14,7 @@ import { getSettings } from "@/lib/settings";
 import { getSiteDictionary } from "@/lib/content";
 import { buildOpenGraph } from "@/lib/metadata";
 import type { Locale } from "@/lib/products";
+import { Analytics } from "@vercel/analytics/next";
 
 
 export const viewport: Viewport = {
@@ -109,6 +110,7 @@ export default async function LocaleLayout({
             <WhatsAppButton dict={dict} whatsappNumber={settings.contact.whatsappNumber} />
           </CatalogProvider>
         </TrackingProvider>
+        <Analytics />
       </body>
     </html>
   );
