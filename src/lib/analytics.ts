@@ -52,7 +52,7 @@ const LAST_KEY = "alsuliman_attribution_last";
 // Vendor tags only receive events when their own ID is configured.
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? "";
 const GA4_ID = process.env.NEXT_PUBLIC_GA4_ID ?? "";
-const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "";
+const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-WJ4M9JGH";
 
 const emptyTouch = (): AnalyticsTouch => ({
   utmSource: "",

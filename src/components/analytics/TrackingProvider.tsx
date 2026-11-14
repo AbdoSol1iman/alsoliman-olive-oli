@@ -7,7 +7,7 @@ import { captureAttribution, ensureAnalyticsIds, trackEvent } from "@/lib/analyt
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? "";
 const GA4_ID = process.env.NEXT_PUBLIC_GA4_ID ?? "";
-const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "";
+const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID || "GTM-WJ4M9JGH";
 
 type FbqStub = ((...args: unknown[]) => void) & {
   queue?: unknown[][];
@@ -24,7 +24,7 @@ function installStubs() {
   };
   w.dataLayer = w.dataLayer ?? [];
 
-  if (GA4_ID && !w.gtag) {
+  if (!w.gtag) {
     w.gtag = (...args: unknown[]) => {
       w.dataLayer!.push(args);
     };
@@ -85,13 +85,18 @@ gtag('config', '${GA4_ID}', { send_page_view: false });`}
       ) : null}
 
       {GTM_ID ? (
-        <Script id="gtm" strategy="afterInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','${GTM_ID}');`}
-        </Script>
+        <>
+          <Script
+            id="gtm-src"
+            strategy="afterInteractive"
+            src={`https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`}
+          />
+          <Script id="gtm-init" strategy="afterInteractive">
+            {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());`}
+          </Script>
+        </>
       ) : null}
 
       {children}
